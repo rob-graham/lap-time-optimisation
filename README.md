@@ -26,7 +26,7 @@ pip install -r requirements.txt
 Once implementation is complete, run simulations via the command line. Example:
 
 ```bash
-python src/main.py --track data/track_layout.csv --bike data/bike_params_r6.csv
+python -m src.run_demo --track data/track_layout.csv --bike data/bike_params_r6.csv
 ```
 
 Replace `track_layout.csv` and `bike_params_r6.csv` with the desired files.
