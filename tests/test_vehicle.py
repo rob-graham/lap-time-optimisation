@@ -56,3 +56,18 @@ def test_tractive_force(tmp_path: Path) -> None:
     expected_forces = torque * total_ratio * 0.9 / 0.3
     assert np.allclose(speeds, expected_speeds)
     assert np.allclose(forces, expected_forces)
+
+def test_tractive_force_envelope_decreases() -> None:
+    param_file = Path(__file__).resolve().parents[1] / "data" / "bike_params_sv650.csv"
+    vehicle = Vehicle(param_file)
+    shift_rpm = vehicle.params["shift_rpm"]
+    ratio1 = vehicle.primary * vehicle.gear_ratios[0] * vehicle.final_drive
+    v_shift = shift_rpm * 2 * np.pi * vehicle.rw / (60.0 * ratio1)
+
+    def envelope(speed: float) -> float:
+        gears = range(1, len(vehicle.gear_ratios) + 1)
+        return max(vehicle.tractive_force(speed, g) for g in gears)
+
+    before = envelope(0.99 * v_shift)
+    after = envelope(1.01 * v_shift)
+    assert after < before
