@@ -12,7 +12,14 @@ from typing import Iterable, Sequence
 import numpy as np
 from scipy.optimize import minimize, NonlinearConstraint
 
-from path_param import LateralOffsetSpline, path_curvature
+# ``path_optim`` can be imported either as part of the ``src`` package or as a
+# stand-alone module.  The ``try``/``except`` block below supports both usages
+# by attempting a relative import first and falling back to an absolute import
+# if that fails.
+try:  # pragma: no cover - import shim
+    from .path_param import LateralOffsetSpline, path_curvature
+except ImportError:  # pragma: no cover - direct execution support
+    from path_param import LateralOffsetSpline, path_curvature
 
 
 def optimise_lateral_offset(
