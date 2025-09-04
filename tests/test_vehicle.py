@@ -17,6 +17,9 @@ m,200
 CdA,0.3
 Crr,0.01
 rw,0.3
+mu,1.5
+a_wheelie_max,5.0
+a_brake,9.0
 shift_rpm,10000
 primary,2.0
 gear1,2.0
@@ -71,3 +74,23 @@ def test_tractive_force_envelope_decreases() -> None:
     before = envelope(0.99 * v_shift)
     after = envelope(1.01 * v_shift)
     assert after < before
+
+
+def test_max_acceleration_limits(tmp_path: Path) -> None:
+    csv_path = _create_csv(tmp_path)
+    vehicle = Vehicle(csv_path)
+
+    rpm = 5000.0
+    ratio = vehicle.primary * vehicle.gear_ratios[0] * vehicle.final_drive
+    speed = rpm * 2 * np.pi * vehicle.rw / (60.0 * ratio)
+
+    ax0 = vehicle.max_acceleration(speed, 1, 0.0)
+    assert np.isclose(ax0, vehicle.a_wheelie_max)
+
+    ay_near = vehicle.mu * vehicle.g * 0.99
+    ax_near = vehicle.max_acceleration(speed, 1, ay_near)
+    assert ax_near < ax0
+
+    ay_limit = vehicle.mu * vehicle.g
+    ax_zero = vehicle.max_acceleration(speed, 1, ay_limit)
+    assert np.isclose(ax_zero, 0.0)
