@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from typing import List, Tuple, Iterable
 import math
 
+from src.drivetrain_utils import engine_rpm, select_gear
+
 
 @dataclass
 class TrackPoint:
@@ -421,14 +423,9 @@ class BikeParams:
         return self.T_peak
 
 
-def engine_rpm(v: float, bp: BikeParams, gear: float) -> float:
-    omega_w = v / bp.rw
-    omega_e = omega_w * bp.primary * bp.final_drive * gear
-    return omega_e * 60.0 / (2 * math.pi)
-
-
 def wheel_force(v: float, bp: BikeParams, gear: float) -> float:
-    T = bp.torque_curve(engine_rpm(v, bp, gear))
+    rpm = engine_rpm(v, bp.primary, bp.final_drive, gear, bp.rw)
+    T = bp.torque_curve(rpm)
     G = bp.primary * bp.final_drive * gear
     return (T * G * bp.eta_driveline) / bp.rw
 
@@ -457,14 +454,6 @@ def traction_circle_cap(
     a_max = bp.mu * bp.g * math.cos(grade) * math.cos(camber)
     inside = (a_max * a_max) * (1.0 - eps) - a_lat * a_lat
     return math.sqrt(max(0.0, inside))
-
-
-def select_gear(v: float, bp: BikeParams) -> float:
-    """Select the highest gear that keeps engine rpm below the shift point."""
-    for g in reversed(bp.gears):
-        if engine_rpm(v, bp, g) <= bp.shift_rpm:
-            return g
-    return min(bp.gears)
 
 
 def compute_speed_profile(
@@ -540,7 +529,9 @@ def compute_speed_profile(
     for _ in range(sweeps):
         for i in range(n - 1):
             v_i = v[i]
-            gear = select_gear(v_i, bp)
+            gear = select_gear(
+                v_i, bp.gears, bp.shift_rpm, bp.primary, bp.final_drive, bp.rw
+            )
             Fw = wheel_force(v_i, bp, gear)
             a_base = (Fw - aero_drag(v_i, bp) - roll_res(bp)) / bp.m
             a = a_base - bp.g * math.sin(grade[i])
@@ -760,9 +751,11 @@ def main():
     gears: List[int] = []
     rpms: List[float] = []
     for v in speeds:
-        gear_ratio = select_gear(v, bp)
+        gear_ratio = select_gear(
+            v, bp.gears, bp.shift_rpm, bp.primary, bp.final_drive, bp.rw
+        )
         gears.append(bp.gears.index(gear_ratio) + 1)
-        rpms.append(engine_rpm(v, bp, gear_ratio))
+        rpms.append(engine_rpm(v, bp.primary, bp.final_drive, gear_ratio, bp.rw))
 
     save_csv(args.output, pts, dists, speeds, gears, rpms, curvatures, limiters)
     print(f"Lap time: {lap_time:.2f} s")
