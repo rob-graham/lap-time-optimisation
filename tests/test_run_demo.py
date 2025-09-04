@@ -11,7 +11,7 @@ from src.run_demo import run
 
 
 def test_one_corner_track_open_track() -> None:
-    out_dir = run(
+    lap_time, out_dir = run(
         "data/oneCornerTrack.csv",
         "data/bike_params_sv650.csv",
         ds=1.0,
@@ -19,6 +19,7 @@ def test_one_corner_track_open_track() -> None:
         n_ctrl=20,
         closed=False,
     )
+    assert lap_time > 0
     geom = pd.read_csv(out_dir / "geometry.csv")
     x = geom["x_center_m"].to_numpy()
     y = geom["y_center_m"].to_numpy()
