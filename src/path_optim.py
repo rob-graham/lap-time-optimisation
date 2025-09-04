@@ -62,7 +62,9 @@ def optimise_lateral_offset(
         offset at these points is varied by the optimiser.
     e_init:
         Optional initial guess for the offset values at ``s_control``. If not
-        supplied, zeros are used.
+        supplied and ``cost='lap_time'``, a preliminary optimisation with
+        ``cost='curvature'`` is performed to provide a non-zero warm start;
+        otherwise zeros are used.
     buffer:
         Safety margin subtracted from the track half-width to keep the path
         away from the edges.
@@ -99,8 +101,25 @@ def optimise_lateral_offset(
     if left_edge.shape != right_edge.shape or left_edge.shape[0] != s.size:
         raise ValueError("left_edge and right_edge must match shape of s")
 
+    if cost not in {"curvature", "lap_time"}:
+        raise ValueError("cost must be 'curvature' or 'lap_time'")
+
     if e_init is None:
-        e_init = np.zeros_like(s_control)
+        if cost == "lap_time":
+            warm_start, _ = optimise_lateral_offset(
+                s,
+                kappa_c,
+                left_edge,
+                right_edge,
+                s_control,
+                buffer=buffer,
+                method=method,
+                max_iterations=max_iterations,
+                cost="curvature",
+            )
+            e_init = warm_start.e_control
+        else:
+            e_init = np.zeros_like(s_control)
     else:
         e_init = np.asarray(e_init, dtype=float)
         if e_init.shape != s_control.shape:
@@ -110,9 +129,6 @@ def optimise_lateral_offset(
     half_width = 0.5 * np.linalg.norm(left_edge - right_edge, axis=1)
     upper_bound = half_width - buffer
     lower_bound = -upper_bound
-
-    if cost not in {"curvature", "lap_time"}:
-        raise ValueError("cost must be 'curvature' or 'lap_time'")
 
     def objective(e_ctrl: np.ndarray) -> float:
         spline = LateralOffsetSpline(s_control, e_ctrl)
