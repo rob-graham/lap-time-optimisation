@@ -72,6 +72,7 @@ def run(
         for k, v in sorted(bike_params.items())
         if k.startswith("gear")
     ]
+    gear_lookup = {ratio: i + 1 for i, ratio in enumerate(gears)}
 
     v, ax, ay, limit, lap_time = solve_speed_profile(
         s, kappa_path, mu, a_wheelie_max, a_brake, closed_loop=closed
@@ -81,7 +82,7 @@ def run(
     gear_ratio = np.array(
         [select_gear(vi, gears, shift_rpm, primary, final_drive, rw) for vi in v]
     )
-    gear_idx = np.array([gears.index(gr) + 1 for gr in gear_ratio], dtype=int)
+    gear_idx = np.vectorize(gear_lookup.get)(gear_ratio).astype(int)
     rpm = np.array(
         [engine_rpm(vi, primary, final_drive, gr, rw) for vi, gr in zip(v, gear_ratio)]
     )
