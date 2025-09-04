@@ -29,7 +29,9 @@ Once implementation is complete, run simulations via the command line. Example:
 python -m src.run_demo --track data/track_layout.csv --bike data/bike_params_r6.csv
 ```
 
-Replace `track_layout.csv` and `bike_params_r6.csv` with the desired files.
+Replace `track_layout.csv` and `bike_params_r6.csv` with the desired files. By
+default, the command prints the simulated lap time; pass `--quiet-lap-time` to
+silence this summary output.
 
 The track layout file follows the ``track_layout.csv`` format where each row
 describes the start of either a straight or constant-radius corner section. The
