@@ -21,6 +21,8 @@ def solve_speed_profile(
     a_wheelie_max: float,
     a_brake: float,
     v_init: Iterable[float] | None = None,
+    v_start: float | None = None,
+    v_end: float | None = None,
     closed_loop: bool = False,
     g: float = 9.81,
     max_iterations: int = 50,
@@ -44,6 +46,10 @@ def solve_speed_profile(
     v_init:
         Optional initial guess for the speed profile.  If ``None`` a profile
         based on the lateral acceleration limit ``mu * g`` is used.
+    v_start, v_end:
+        Optional speed constraints at the first and last ``s`` positions.  A
+        value of ``None`` leaves the respective boundary unconstrained.
+        ``closed_loop`` takes precedence over these parameters.
     closed_loop:
         If ``True`` the path is treated as a closed loop and the solver iterates
         until the initial and final speeds converge to the same value.
@@ -85,15 +91,18 @@ def solve_speed_profile(
         if v.shape != s.shape:
             raise ValueError("v_init must have the same shape as s")
     if not closed_loop:
-        # Enforce boundary conditions of starting and ending at rest.
-        v[0] = 0.0
-        v[-1] = 0.0
+        if v_start is not None:
+            v[0] = float(v_start)
+        if v_end is not None:
+            v[-1] = float(v_end)
 
     mu_g = mu * g
     for _ in range(max_iterations):
         if not closed_loop:
-            v[0] = 0.0
-            v[-1] = 0.0
+            if v_start is not None:
+                v[0] = float(v_start)
+            if v_end is not None:
+                v[-1] = float(v_end)
         # Enforce lateral acceleration limits
         mask = np.abs(kappa) > 1e-9
         v[mask] = np.minimum(v[mask], np.sqrt(mu_g / np.abs(kappa[mask])))
@@ -118,8 +127,8 @@ def solve_speed_profile(
                 v[i + 1] = min(v_next, current_v)
             else:
                 v[i + 1] = max(v[i + 1], v_next)
-        if not closed_loop:
-            v[-1] = 0.0
+        if not closed_loop and v_end is not None:
+            v[-1] = float(v_end)
         # Enforce lateral limits again after forward pass
         v[mask] = np.minimum(v[mask], np.sqrt(mu_g / np.abs(kappa[mask])))
 
