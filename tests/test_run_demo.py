@@ -17,10 +17,11 @@ def test_one_corner_track_open_track() -> None:
         ds=1.0,
         buffer=0.5,
         n_ctrl=20,
+        closed=False,
     )
     geom = pd.read_csv(out_dir / "geometry.csv")
     x = geom["x_center_m"].to_numpy()
     y = geom["y_center_m"].to_numpy()
-    assert not (np.isclose(x[0], x[-1]) and np.isclose(y[0], y[-1]))
+    assert not np.allclose([x[0], y[0]], [x[-1], y[-1]])
     length = geom["s_m"].iloc[-1]
     assert np.isclose(length, 327.0, atol=1e-6)

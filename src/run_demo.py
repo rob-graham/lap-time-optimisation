@@ -22,16 +22,24 @@ from .path_param import path_curvature
 from .speed_solver import solve_speed_profile
 
 
-def run(track_file: str, bike_file: str, ds: float, buffer: float, n_ctrl: int) -> Path:
+def run(
+    track_file: str,
+    bike_file: str,
+    ds: float,
+    buffer: float,
+    n_ctrl: int,
+    closed: bool | None = None,
+) -> Path:
     """Execute the optimisation pipeline and return the output directory."""
     # Load input data
     df = read_track_csv(track_file)
     bike_params = read_bike_params_csv(bike_file)
 
-    closed = (
-        np.hypot(df["x_m"].iloc[0] - df["x_m"].iloc[-1], df["y_m"].iloc[0] - df["y_m"].iloc[-1])
-        <= ds
-    )
+    if closed is None:
+        start = df[["x_m", "y_m"]].iloc[0].to_numpy()
+        end = df[["x_m", "y_m"]].iloc[-1].to_numpy()
+        closed = np.allclose(start, end, atol=1e-6)
+
     geom = load_track_layout(track_file, ds, closed=closed)
     x, y, psi, kappa_c = geom.x, geom.y, geom.heading, geom.curvature
     left_edge, right_edge = geom.left_edge, geom.right_edge
@@ -102,9 +110,32 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--ctrl-points", type=int, default=20, help="Number of lateral offset control points"
     )
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--open",
+        dest="closed",
+        action="store_const",
+        const=False,
+        help="Force track to be treated as open",
+    )
+    group.add_argument(
+        "--closed",
+        dest="closed",
+        action="store_const",
+        const=True,
+        help="Force track to be treated as closed",
+    )
+    parser.set_defaults(closed=None)
     args = parser.parse_args(argv)
 
-    out_dir = run(args.track, args.bike, args.ds, args.buffer, args.ctrl_points)
+    out_dir = run(
+        args.track,
+        args.bike,
+        args.ds,
+        args.buffer,
+        args.ctrl_points,
+        closed=args.closed,
+    )
     print(f"Outputs written to {out_dir}")
 
 
