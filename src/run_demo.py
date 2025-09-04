@@ -157,6 +157,11 @@ def main(argv: list[str] | None = None) -> None:
         help="Force track to be treated as closed",
     )
     parser.set_defaults(closed=None)
+    parser.add_argument(
+        "--quiet-lap-time",
+        action="store_true",
+        help="Suppress lap time output",
+    )
     args = parser.parse_args(argv)
 
     lap_time, out_dir = run(
@@ -167,7 +172,8 @@ def main(argv: list[str] | None = None) -> None:
         args.ctrl_points,
         closed=args.closed,
     )
-    print(f"Lap time: {lap_time:.2f} s")
+    if not args.quiet_lap_time:
+        print(f"Lap time: {lap_time:.2f} s")
     print(f"Outputs written to {out_dir}")
 
 
