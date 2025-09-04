@@ -158,21 +158,22 @@ def load_track_layout(path: str, ds: float) -> TrackGeometry:
             r = radius_nodes[i]
             if r == 0:
                 raise ValueError("corner segment requires non-zero radius")
+            R = abs(r)
             v = np.array([x1 - x0, y1 - y0], dtype=float)
             chord = float(np.hypot(*v))
             mid = np.array([x0 + x1, y0 + y1], dtype=float) / 2.0
             perp = np.array([-v[1], v[0]]) / chord
-            h = np.sqrt(r**2 - (chord / 2.0) ** 2)
+            h = np.sqrt(R**2 - (chord / 2.0) ** 2)
             centre = mid + np.sign(r) * perp * h
             phi0 = np.arctan2(y0 - centre[1], x0 - centre[0])
-            theta = 2.0 * np.arcsin(chord / (2.0 * abs(r))) * np.sign(r)
-            seg_len = abs(r * theta)
+            theta = 2.0 * np.arcsin(chord / (2.0 * R)) * np.sign(r)
+            seg_len = abs(R * theta)
             s_local = np.arange(0.0, seg_len, ds)
             if i != 0:
                 s_local = s_local[1:]
             phi = phi0 + s_local / r
-            x_seg = centre[0] + r * np.cos(phi)
-            y_seg = centre[1] + r * np.sin(phi)
+            x_seg = centre[0] + R * np.cos(phi)
+            y_seg = centre[1] + R * np.sin(phi)
             heading_seg = phi + np.sign(r) * (np.pi / 2.0)
             curvature_seg = np.full_like(x_seg, 1.0 / r)
             width_seg = w0 + (w1 - w0) * (s_local / seg_len)
