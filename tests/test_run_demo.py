@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 import json
+import re
 
 import numpy as np
 import pandas as pd
@@ -11,7 +12,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from src.run_demo import run
 
 
-def test_one_corner_track_open_track() -> None:
+def test_one_corner_track_open_track(capfd) -> None:
     lap_time, out_dir = run(
         "data/oneCornerTrack.csv",
         "data/bike_params_sv650.csv",
@@ -20,6 +21,11 @@ def test_one_corner_track_open_track() -> None:
         n_ctrl=20,
         closed=False,
     )
+
+    out = capfd.readouterr().out
+    assert re.search(r"Path optimisation: \d+ iterations", out)
+    assert re.search(r"Speed solver: \d+ iterations", out)
+    assert re.search(r"Total runtime: [0-9.]+ s", out)
 
     summary_path = out_dir / "summary.json"
     assert summary_path.exists()

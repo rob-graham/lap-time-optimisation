@@ -21,6 +21,7 @@ from pathlib import Path
 from datetime import datetime
 import argparse
 import json
+import time
 
 import numpy as np
 import pandas as pd
@@ -50,6 +51,8 @@ def run(
         Maximum iterations for the path optimisation step. Forwarded to
         :func:`optimise_lateral_offset`.
     """
+    start_time = time.perf_counter()
+
     # Load input data
     df = read_track_csv(track_file)
     bike_params = read_bike_params_csv(bike_file)
@@ -75,7 +78,6 @@ def run(
         buffer=buffer,
         max_iterations=max_iter,
     )
-    print(f"Path optimisation: {opt_iterations} iterations")
     offset = offset_spline(s)
     kappa_path = path_curvature(s, offset_spline, kappa_c)
     normal_x = -np.sin(psi)
@@ -98,10 +100,9 @@ def run(
     ]
     gear_lookup = {ratio: i + 1 for i, ratio in enumerate(gears)}
 
-    v, ax, ay, limit, lap_time, iterations, elapsed_s = solve_speed_profile(
+    v, ax, ay, limit, lap_time, speed_iterations, _ = solve_speed_profile(
         s, kappa_path, mu, a_wheelie_max, a_brake, closed_loop=closed
     )
-    print(f"Speed solver: {iterations} iterations, {elapsed_s:.3f} s")
 
     speed_kph = v * 3.6
     gear_ratio = np.array(
@@ -158,6 +159,13 @@ def run(
     # overall lap time without parsing the full CSV results.
     with (out_dir / "summary.json").open("w") as f:
         json.dump({"lap_time_s": lap_time}, f)
+
+    total_runtime = time.perf_counter() - start_time
+    print(
+        f"Path optimisation: {opt_iterations} iterations, "
+        f"Speed solver: {speed_iterations} iterations, "
+        f"Total runtime: {total_runtime:.3f} s"
+    )
 
     return lap_time, out_dir
 
