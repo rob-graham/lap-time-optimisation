@@ -97,9 +97,10 @@ def run(
     ]
     gear_lookup = {ratio: i + 1 for i, ratio in enumerate(gears)}
 
-    v, ax, ay, limit, lap_time = solve_speed_profile(
+    v, ax, ay, limit, lap_time, iterations, elapsed_s = solve_speed_profile(
         s, kappa_path, mu, a_wheelie_max, a_brake, closed_loop=closed
     )
+    print(f"Speed solver: {iterations} iterations, {elapsed_s:.3f} s")
 
     speed_kph = v * 3.6
     gear_ratio = np.array(
