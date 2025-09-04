@@ -82,7 +82,7 @@ def run(
                 return i + 1
         return 1
 
-    v, ax, ay, limit = solve_speed_profile(
+    v, ax, ay, limit, lap_time = solve_speed_profile(
         s, kappa_path, mu, a_wheelie_max, a_brake, closed_loop=closed
     )
 
@@ -129,9 +129,6 @@ def run(
     write_csv(geometry_df, out_dir / "geometry.csv")
     write_csv(results_df, out_dir / "results.csv")
 
-    ds_arr = np.diff(s)
-    v_avg = 0.5 * (v[:-1] + v[1:])
-    lap_time = float(np.sum(ds_arr / np.maximum(v_avg, 1e-9)))
     return lap_time, out_dir
 
 
