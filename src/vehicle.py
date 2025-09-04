@@ -69,6 +69,11 @@ class Vehicle:
             torque_data = [(0.0, t_peak), (shift, t_peak)]
 
         self.params = params
+
+        # Ensure torque points are ordered by increasing RPM to avoid
+        # non-monotonic behaviour during interpolation.
+        torque_data.sort(key=lambda p: p[0])
+
         self.rpm = np.array([p[0] for p in torque_data], dtype=float)
         self.torque = np.array([p[1] for p in torque_data], dtype=float)
 
