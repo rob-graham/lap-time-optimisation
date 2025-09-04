@@ -50,6 +50,7 @@ def test_lap_time_cost_reduces_lap_time():
         a_wheelie_max=a_wheelie_max,
         a_brake=a_brake,
         speed_max_iterations=20,
+        speed_tol=1e-2,
         v_start=0.0,
         v_end=0.0,
         lap_time_weight=1.0,

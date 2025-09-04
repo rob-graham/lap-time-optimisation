@@ -33,6 +33,11 @@ Replace `track_layout.csv` and `bike_params_r6.csv` with the desired files. By
 default, the command prints the simulated lap time; pass `--quiet-lap-time` to
 silence this summary output.
 
+The speed profile solver accuracy can be traded for faster execution using
+`--speed-max-iter` and `--speed-tol`. Smaller iteration counts or looser
+convergence tolerances reduce run time but may slightly increase lap time
+estimates.
+
 The track layout file follows the ``track_layout.csv`` format where each row
 describes the start of either a straight or constant-radius corner section. The
 columns ``x_m``, ``y_m``, ``section_type`` and ``radius_m`` define the geometry

@@ -83,9 +83,15 @@ def optimise_lateral_offset(
         lap time computed by :func:`speed_solver.solve_speed_profile`.
     lap_time_weight:
         Multiplicative factor applied to the lap time when ``cost='lap_time'``.
-    mu, a_wheelie_max, a_brake, v_start, v_end, closed_loop, g, speed_max_iterations, speed_tol:
+    mu, a_wheelie_max, a_brake, v_start, v_end, closed_loop, g:
         Parameters forwarded to :func:`speed_solver.solve_speed_profile` when
         ``cost='lap_time'``.
+    speed_max_iterations:
+        Maximum iterations for the speed profile solver. Reducing this value
+        yields faster but potentially less accurate lap time estimates.
+    speed_tol:
+        Convergence tolerance for the speed profile solver. A looser tolerance
+        speeds up evaluation at the expense of precision.
 
     Returns
     -------
