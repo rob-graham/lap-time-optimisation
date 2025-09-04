@@ -43,6 +43,8 @@ def run(
     cost: str = "curvature",
     closed: bool | None = None,
     max_iter: int | None = None,
+    speed_max_iter: int = 50,
+    speed_tol: float = 1e-3,
 ) -> tuple[float, Path]:
     """Execute the optimisation pipeline and return lap time and output directory.
 
@@ -54,6 +56,10 @@ def run(
     max_iter:
         Maximum iterations for the path optimisation step. Forwarded to
         :func:`optimise_lateral_offset`.
+    speed_max_iter, speed_tol:
+        Parameters controlling accuracy of the speed profile solver. Smaller
+        iteration counts or looser tolerances speed up evaluation but may
+        reduce precision.
     """
     start_time = time.perf_counter()
 
@@ -91,6 +97,8 @@ def run(
         a_wheelie_max=a_wheelie_max,
         a_brake=a_brake,
         closed_loop=closed,
+        speed_max_iterations=speed_max_iter,
+        speed_tol=speed_tol,
     )
     offset = offset_spline(s)
     kappa_path = path_curvature(s, offset_spline, kappa_c)
@@ -112,7 +120,14 @@ def run(
     gear_lookup = {ratio: i + 1 for i, ratio in enumerate(gears)}
 
     v, ax, ay, limit, lap_time, speed_iterations, _ = solve_speed_profile(
-        s, kappa_path, mu, a_wheelie_max, a_brake, closed_loop=closed
+        s,
+        kappa_path,
+        mu,
+        a_wheelie_max,
+        a_brake,
+        closed_loop=closed,
+        max_iterations=speed_max_iter,
+        tol=speed_tol,
     )
 
     speed_kph = v * 3.6
@@ -197,6 +212,18 @@ def main(argv: list[str] | None = None) -> None:
         help="Maximum iterations for path optimisation",
     )
     parser.add_argument(
+        "--speed-max-iter",
+        type=int,
+        default=50,
+        help="Maximum iterations for speed profile solver",
+    )
+    parser.add_argument(
+        "--speed-tol",
+        type=float,
+        default=1e-3,
+        help="Tolerance for speed profile solver",
+    )
+    parser.add_argument(
         "--cost",
         choices=["curvature", "lap_time"],
         default="curvature",
@@ -234,6 +261,8 @@ def main(argv: list[str] | None = None) -> None:
         cost=args.cost,
         closed=args.closed,
         max_iter=args.max_iter,
+        speed_max_iter=args.speed_max_iter,
+        speed_tol=args.speed_tol,
     )
     if not args.quiet_lap_time:
         print(f"Lap time: {lap_time:.2f} s")
