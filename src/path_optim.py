@@ -31,6 +31,7 @@ def optimise_lateral_offset(
     e_init: Sequence[float] | None = None,
     buffer: float = 0.0,
     method: str = "SLSQP",
+    max_iterations: int | None = None,
 ):
     """Optimise lateral offset control points for a racing line.
 
@@ -56,6 +57,11 @@ def optimise_lateral_offset(
     method:
         Optimisation algorithm passed to :func:`scipy.optimize.minimize`.
         Either ``'SLSQP'`` or ``'trust-constr'``.
+    max_iterations:
+        Maximum number of iterations for the optimiser. Passed as
+        ``maxiter`` in the ``options`` argument to
+        :func:`scipy.optimize.minimize`. If ``None``, SciPy's default is
+        used.
 
     Returns
     -------
@@ -107,7 +113,14 @@ def optimise_lateral_offset(
 
         constraints = {"type": "ineq", "fun": inequality}
 
-    result = minimize(objective, e_init, method=method, constraints=constraints)
+    options = {"maxiter": max_iterations} if max_iterations is not None else None
+    result = minimize(
+        objective,
+        e_init,
+        method=method,
+        constraints=constraints,
+        options=options,
+    )
 
     if not result.success:
         raise RuntimeError("Optimisation failed: " + result.message)
