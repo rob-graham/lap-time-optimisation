@@ -45,6 +45,7 @@ def run(
     geom = load_track_layout(track_file, ds, closed=closed)
     x, y, psi, kappa_c = geom.x, geom.y, geom.heading, geom.curvature
     left_edge, right_edge = geom.left_edge, geom.right_edge
+    inner_edge, outer_edge = geom.inner_edge, geom.outer_edge
     s = np.arange(x.size) * ds
 
     # Path optimisation
@@ -103,6 +104,10 @@ def run(
             "y_left_m": left_edge[:, 1],
             "x_right_m": right_edge[:, 0],
             "y_right_m": right_edge[:, 1],
+            "x_inner_m": inner_edge[:, 0],
+            "y_inner_m": inner_edge[:, 1],
+            "x_outer_m": outer_edge[:, 0],
+            "y_outer_m": outer_edge[:, 1],
         }
     )
     results_df = pd.DataFrame(
