@@ -7,7 +7,7 @@ import pandas as pd
 # Ensure src directory on path for test discovery when pytest runs directly
 sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 
-from geometry import load_track_layout
+from geometry import load_track_layout, load_track
 
 
 def test_circle_track_length_and_curvature(tmp_path: Path) -> None:
@@ -59,3 +59,29 @@ def test_right_hand_corner_continuity(tmp_path: Path) -> None:
 
     assert np.isclose(np.linalg.norm(corner_pt - node), 1.0, atol=5e-3)
     assert np.isclose(np.linalg.norm(prev_pt - node), 1.0, atol=5e-3)
+
+
+def test_open_track_endpoints_and_length(tmp_path: Path) -> None:
+    data = {
+        "x_m": [0.0, 0.0, 100.0],
+        "y_m": [0.0, 100.0, 100.0],
+        "width_m": [10.0, 10.0, 10.0],
+    }
+    df = pd.DataFrame(data)
+    track_file = tmp_path / "open.csv"
+    df.to_csv(track_file, index=False)
+
+    ds = 1.0
+    x, y, heading, curvature, left_edge, right_edge = load_track(
+        str(track_file), ds=ds, closed=False
+    )
+
+    # Start and end points should be distinct for an open track.
+    assert not np.allclose([x[0], y[0]], [x[-1], y[-1]])
+
+    # The path length should match the length computed from the nodes.
+    expected_length = np.sum(
+        np.hypot(np.diff(df["x_m"].to_numpy()), np.diff(df["y_m"].to_numpy()))
+    )
+    length = np.sum(np.hypot(np.diff(x), np.diff(y))) + ds
+    assert np.isclose(length, expected_length, atol=1.0e-6)
