@@ -44,6 +44,7 @@ def optimise_lateral_offset(
     g: float = 9.81,
     speed_max_iterations: int = 50,
     speed_tol: float = 1e-3,
+    lap_time_weight: float = 1.0,
 ) -> tuple[LateralOffsetSpline, int]:
     """Optimise lateral offset control points for a racing line.
 
@@ -80,6 +81,8 @@ def optimise_lateral_offset(
         Objective to minimise. ``"curvature"`` minimises the integral of the
         squared curvature and its derivative. ``"lap_time"`` minimises the
         lap time computed by :func:`speed_solver.solve_speed_profile`.
+    lap_time_weight:
+        Multiplicative factor applied to the lap time when ``cost='lap_time'``.
     mu, a_wheelie_max, a_brake, v_start, v_end, closed_loop, g, speed_max_iterations, speed_tol:
         Parameters forwarded to :func:`speed_solver.solve_speed_profile` when
         ``cost='lap_time'``.
@@ -152,7 +155,7 @@ def optimise_lateral_offset(
                 max_iterations=speed_max_iterations,
                 tol=speed_tol,
             )
-            return float(lap_time)
+            return float(lap_time_weight * lap_time)
 
     if method == "trust-constr":
         def eval_e(e_ctrl: np.ndarray) -> np.ndarray:
