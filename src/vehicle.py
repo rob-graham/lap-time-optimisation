@@ -82,6 +82,9 @@ class Vehicle:
         self.eta = params.get("eta_driveline", 1.0)
         self.primary = params["primary"]
         self.final_drive = params["final_drive"]
+        self.mu = params["mu"]
+        self.a_wheelie_max = params["a_wheelie_max"]
+        self.a_brake = params["a_brake"]
 
         # Collect gear ratios in numerical order.
         gear_keys = sorted(
@@ -133,3 +136,37 @@ class Vehicle:
             return f_rr
         v = np.asarray(speed, dtype=float)
         return np.full_like(v, f_rr, dtype=float)
+
+    # ------------------------------------------------------------------
+    # Acceleration helpers
+    def max_acceleration(self, speed: float, gear: int, ay: float) -> float:
+        """Return the maximum longitudinal acceleration at ``speed`` and ``gear``.
+
+        Parameters
+        ----------
+        speed:
+            Vehicle speed in metres per second.
+        gear:
+            Selected gear, indexed from 1.
+        ay:
+            Lateral acceleration in metres per second squared.
+
+        Returns
+        -------
+        float
+            The maximum achievable longitudinal acceleration, limited by
+            available engine force, aerodynamic drag, rolling resistance and
+            the traction ellipse with wheelie constraint.
+        """
+
+        f_drive = (
+            self.tractive_force(speed, gear)
+            - self.aerodynamic_drag(speed)
+            - self.rolling_resistance()
+        )
+        ax_engine = f_drive / self.m
+        ax_limit = min(
+            self.a_wheelie_max,
+            float(np.sqrt(max((self.mu * self.g) ** 2 - ay**2, 0.0))),
+        )
+        return min(ax_engine, ax_limit)
