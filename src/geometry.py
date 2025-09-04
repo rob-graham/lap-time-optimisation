@@ -18,7 +18,6 @@ dataclass bundling the centreline and track-edge coordinates.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -26,7 +25,12 @@ import pandas as pd
 
 @dataclass
 class TrackGeometry:
-    """Discrete representation of a race track."""
+    """Discrete representation of a race track.
+
+    ``left_edge`` and ``right_edge`` give the coordinates of the track
+    boundaries.  They are defined relative to the direction of travel such that
+    ``left_edge`` lies to the rider's left and ``right_edge`` to the right.
+    """
 
     x: np.ndarray
     y: np.ndarray
@@ -34,22 +38,9 @@ class TrackGeometry:
     curvature: np.ndarray
     left_edge: np.ndarray
     right_edge: np.ndarray
-    inner_edge: np.ndarray
-    outer_edge: np.ndarray
 
 
-def load_track(
-    file_path: str, ds: float, closed: bool = True
-) -> Tuple[
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-]:
+def load_track(file_path: str, ds: float, closed: bool = True) -> TrackGeometry:
     """Load a track layout and interpolate it onto a uniform grid.
 
     Parameters
@@ -66,11 +57,10 @@ def load_track(
 
     Returns
     -------
-    Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
-        Arrays for centreline ``x`` and ``y`` coordinates, heading angle
-        ``psi``, curvature ``kappa``, the ``left``/``right`` boundaries and the
-        ``inner``/``outer`` boundaries.  The latter pair distinguish the
-        inside and outside of a corner based on the curvature sign.
+    TrackGeometry
+        Dataclass containing centreline ``x``/``y`` coordinates, heading angle
+        ``psi``, curvature ``kappa`` and the ``left``/``right`` track
+        boundaries.
     """
     if ds <= 0:
         raise ValueError("ds must be positive")
@@ -103,7 +93,7 @@ def load_track(
     heading = np.unwrap(np.arctan2(dy, dx))
     curvature = np.gradient(heading, ds, edge_order=2)
 
-    # Compute coordinates of the left/right and inner/outer boundaries.
+    # Compute coordinates of the left/right boundaries.
     half_width = 0.5 * width_s
     normal_x = -np.sin(heading)
     normal_y = np.cos(heading)
@@ -115,17 +105,7 @@ def load_track(
     left_edge = np.column_stack((x_left, y_left))
     right_edge = np.column_stack((x_right, y_right))
 
-    sign = np.sign(curvature)
-    sign[sign == 0] = 1.0
-    x_inner = x_s + half_width * normal_x * sign
-    y_inner = y_s + half_width * normal_y * sign
-    x_outer = x_s - half_width * normal_x * sign
-    y_outer = y_s - half_width * normal_y * sign
-
-    inner_edge = np.column_stack((x_inner, y_inner))
-    outer_edge = np.column_stack((x_outer, y_outer))
-
-    return x_s, y_s, heading, curvature, left_edge, right_edge, inner_edge, outer_edge
+    return TrackGeometry(x_s, y_s, heading, curvature, left_edge, right_edge)
 
 
 def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometry:
@@ -235,9 +215,4 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
     left_edge = np.column_stack((x + half_width * normal_x, y + half_width * normal_y))
     right_edge = np.column_stack((x - half_width * normal_x, y - half_width * normal_y))
 
-    sign = np.sign(curvature)
-    sign[sign == 0] = 1.0
-    inner_edge = np.column_stack((x + half_width * normal_x * sign, y + half_width * normal_y * sign))
-    outer_edge = np.column_stack((x - half_width * normal_x * sign, y - half_width * normal_y * sign))
-
-    return TrackGeometry(x, y, heading, curvature, left_edge, right_edge, inner_edge, outer_edge)
+    return TrackGeometry(x, y, heading, curvature, left_edge, right_edge)
