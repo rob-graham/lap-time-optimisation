@@ -66,7 +66,7 @@ def run(
 
     # Path optimisation
     s_control = np.linspace(s[0], s[-1], n_ctrl)
-    offset_spline = optimise_lateral_offset(
+    offset_spline, opt_iterations = optimise_lateral_offset(
         s,
         kappa_c,
         left_edge,
@@ -75,6 +75,7 @@ def run(
         buffer=buffer,
         max_iterations=max_iter,
     )
+    print(f"Path optimisation: {opt_iterations} iterations")
     offset = offset_spline(s)
     kappa_path = path_curvature(s, offset_spline, kappa_c)
     normal_x = -np.sin(psi)
