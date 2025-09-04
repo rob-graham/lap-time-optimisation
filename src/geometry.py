@@ -36,7 +36,9 @@ class TrackGeometry:
     right_edge: np.ndarray
 
 
-def load_track(file_path: str, ds: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def load_track(
+    file_path: str, ds: float, closed: bool = True
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Load a track layout and interpolate it onto a uniform grid.
 
     Parameters
@@ -47,6 +49,9 @@ def load_track(file_path: str, ds: float) -> Tuple[np.ndarray, np.ndarray, np.nd
         centreline coordinates and track width at each node.
     ds:
         Spacing of the uniform arc-length grid in metres.
+    closed:
+        Whether to append the first node to the end to form a closed loop.
+        Set ``False`` to leave the track open.
 
     Returns
     -------
@@ -63,8 +68,8 @@ def load_track(file_path: str, ds: float) -> Tuple[np.ndarray, np.ndarray, np.nd
     y = df["y_m"].to_numpy()
     width = df["width_m"].to_numpy()
 
-    # Ensure the track is closed by appending the first point to the end.
-    if x[0] != x[-1] or y[0] != y[-1]:
+    # Optionally ensure the track is closed by appending the first point to the end.
+    if closed and (x[0] != x[-1] or y[0] != y[-1]):
         x = np.r_[x, x[0]]
         y = np.r_[y, y[0]]
         width = np.r_[width, width[0]]
