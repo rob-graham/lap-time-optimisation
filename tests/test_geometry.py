@@ -32,8 +32,10 @@ def test_circle_track_length_and_curvature(tmp_path: Path) -> None:
     length = np.sum(np.hypot(np.diff(np.r_[x, x[0]]), np.diff(np.r_[y, y[0]])))
     assert np.isclose(length, 2 * np.pi * R, atol=1.0)
     assert np.allclose(geom.curvature, 1.0 / R, atol=1e-2)
-    assert np.allclose(geom.inner_edge, geom.left_edge)
-    assert np.allclose(geom.outer_edge, geom.right_edge)
+    dist_left = np.hypot(geom.left_edge[:, 0], geom.left_edge[:, 1])
+    dist_right = np.hypot(geom.right_edge[:, 0], geom.right_edge[:, 1])
+    assert np.allclose(dist_left, R - 5.0, atol=1.0)
+    assert np.allclose(dist_right, R + 5.0, atol=1.0)
 
 
 def test_right_hand_corner_continuity(tmp_path: Path) -> None:
@@ -61,8 +63,11 @@ def test_right_hand_corner_continuity(tmp_path: Path) -> None:
 
     assert np.isclose(np.linalg.norm(corner_pt - node), 1.0, atol=5e-3)
     assert np.isclose(np.linalg.norm(prev_pt - node), 1.0, atol=5e-3)
-    assert np.allclose(geom.inner_edge[idx], geom.right_edge[idx])
-    assert np.allclose(geom.outer_edge[idx], geom.left_edge[idx])
+    width = np.linalg.norm(geom.left_edge - geom.right_edge, axis=1)
+    assert np.allclose(width, 10.0)
+    assert np.linalg.norm(geom.right_edge[idx] - node) < np.linalg.norm(
+        geom.left_edge[idx] - node
+    )
 
 
 def test_open_track_endpoints_and_length(tmp_path: Path) -> None:
@@ -76,16 +81,8 @@ def test_open_track_endpoints_and_length(tmp_path: Path) -> None:
     df.to_csv(track_file, index=False)
 
     ds = 1.0
-    (
-        x,
-        y,
-        heading,
-        curvature,
-        left_edge,
-        right_edge,
-        inner_edge,
-        outer_edge,
-    ) = load_track(str(track_file), ds=ds, closed=False)
+    geom = load_track(str(track_file), ds=ds, closed=False)
+    x, y = geom.x, geom.y
 
     # Start and end points should be distinct for an open track.
     assert not np.allclose([x[0], y[0]], [x[-1], y[-1]])
@@ -96,9 +93,5 @@ def test_open_track_endpoints_and_length(tmp_path: Path) -> None:
     )
     length = np.sum(np.hypot(np.diff(x), np.diff(y))) + ds
     assert np.isclose(length, expected_length, atol=1.0e-6)
-    sign = np.sign(curvature)
-    sign[sign == 0] = 1.0
-    assert np.allclose(inner_edge[sign >= 0], left_edge[sign >= 0])
-    assert np.allclose(inner_edge[sign < 0], right_edge[sign < 0])
-    assert np.allclose(outer_edge[sign >= 0], right_edge[sign >= 0])
-    assert np.allclose(outer_edge[sign < 0], left_edge[sign < 0])
+    width = np.linalg.norm(geom.left_edge - geom.right_edge, axis=1)
+    assert np.allclose(width, 10.0)

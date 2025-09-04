@@ -16,8 +16,8 @@ import matplotlib.pyplot as plt
 def plot_plan_view(
     x_center: Iterable[float],
     y_center: Iterable[float],
-    inner_edge: np.ndarray | None = None,
-    outer_edge: np.ndarray | None = None,
+    left_edge: np.ndarray | None = None,
+    right_edge: np.ndarray | None = None,
     x_path: Optional[Iterable[float]] = None,
     y_path: Optional[Iterable[float]] = None,
     ax: Optional[plt.Axes] = None,
@@ -29,28 +29,27 @@ def plot_plan_view(
     ----------
     x_center, y_center:
         Coordinates of the track centreline.
-    inner_edge, outer_edge:
+    left_edge, right_edge:
         Arrays of shape ``(N, 2)`` giving ``x`` and ``y`` coordinates of the
-        inner and outer track boundaries.  ``left_edge``/``right_edge`` may be
-        supplied instead for backward compatibility.
+        track boundaries.
     x_path, y_path:
         Optional coordinates of the racing line to overlay.
     ax:
         Existing axes to draw on.  If ``None`` a new figure and axes are
         created.
     """
-    if inner_edge is None:
-        inner_edge = kwargs.get("left_edge")
-    if outer_edge is None:
-        outer_edge = kwargs.get("right_edge")
-    if inner_edge is None or outer_edge is None:
+    if left_edge is None:
+        left_edge = kwargs.get("inner_edge")
+    if right_edge is None:
+        right_edge = kwargs.get("outer_edge")
+    if left_edge is None or right_edge is None:
         raise ValueError("Track boundaries must be provided")
 
     if ax is None:
         _, ax = plt.subplots()
 
-    ax.plot(inner_edge[:, 0], inner_edge[:, 1], "k--", label="Track edge")
-    ax.plot(outer_edge[:, 0], outer_edge[:, 1], "k--")
+    ax.plot(left_edge[:, 0], left_edge[:, 1], "k--", label="Track edge")
+    ax.plot(right_edge[:, 0], right_edge[:, 1], "k--")
     ax.plot(x_center, y_center, color="k", label="Centreline")
 
     if x_path is not None and y_path is not None:
