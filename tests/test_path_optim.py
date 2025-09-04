@@ -15,10 +15,11 @@ def test_optimisation_respects_bounds():
     s = np.arange(len(geom.x)) * 10.0
     s_control = np.linspace(s[0], s[-1], 8)
 
-    offset = optimise_lateral_offset(
+    offset, iterations = optimise_lateral_offset(
         s, geom.curvature, geom.left_edge, geom.right_edge, s_control, buffer=0.5
     )
 
+    assert iterations > 0
     e_vals = offset(s)
     half_width = 0.5 * np.linalg.norm(geom.left_edge - geom.right_edge, axis=1) - 0.5
 

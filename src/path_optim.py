@@ -32,7 +32,7 @@ def optimise_lateral_offset(
     buffer: float = 0.0,
     method: str = "SLSQP",
     max_iterations: int | None = None,
-):
+) -> tuple[LateralOffsetSpline, int]:
     """Optimise lateral offset control points for a racing line.
 
     Parameters
@@ -65,8 +65,9 @@ def optimise_lateral_offset(
 
     Returns
     -------
-    LateralOffsetSpline
-        Spline representing the optimised lateral offset ``e(s)``.
+    (LateralOffsetSpline, int)
+        Spline representing the optimised lateral offset ``e(s)`` and the
+        number of iterations performed by the optimiser.
     """
     s = np.asarray(s, dtype=float)
     kappa_c = np.asarray(centreline_curvature, dtype=float)
@@ -125,4 +126,4 @@ def optimise_lateral_offset(
     if not result.success:
         raise RuntimeError("Optimisation failed: " + result.message)
 
-    return LateralOffsetSpline(s_control, result.x)
+    return LateralOffsetSpline(s_control, result.x), int(result.nit)
