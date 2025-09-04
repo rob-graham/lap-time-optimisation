@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+import json
 
 import numpy as np
 import pandas as pd
@@ -19,7 +20,13 @@ def test_one_corner_track_open_track() -> None:
         n_ctrl=20,
         closed=False,
     )
-    assert lap_time > 0
+
+    summary_path = out_dir / "summary.json"
+    assert summary_path.exists()
+    with summary_path.open() as f:
+        summary = json.load(f)
+    assert summary["lap_time_s"] > 0
+    assert np.isclose(summary["lap_time_s"], lap_time)
     geom = pd.read_csv(out_dir / "geometry.csv")
     x = geom["x_center_m"].to_numpy()
     y = geom["y_center_m"].to_numpy()
