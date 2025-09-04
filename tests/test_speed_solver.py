@@ -33,6 +33,11 @@ def test_straight_line_profile() -> None:
     assert np.isclose(v[-1], 0.0, atol=1e-6)
     assert np.isclose(ax[1], 9.81, rtol=1e-2)
     assert np.isclose(ax[-2], -11.772, rtol=1e-2)
+    # verify limiter reasons across the straight segment
+    assert limit[0] == "accel"
+    assert limit[mid] == "wheelie"
+    assert limit[-2] == "stoppie"
+    assert limit[-1] == "braking"
 
 
 def test_straight_line_low_initial_speed_accelerates() -> None:
