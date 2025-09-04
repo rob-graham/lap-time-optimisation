@@ -18,8 +18,10 @@ from scipy.optimize import minimize, NonlinearConstraint
 # if that fails.
 try:  # pragma: no cover - import shim
     from .path_param import LateralOffsetSpline, path_curvature
+    from . import speed_solver
 except ImportError:  # pragma: no cover - direct execution support
     from path_param import LateralOffsetSpline, path_curvature
+    import speed_solver
 
 
 def optimise_lateral_offset(
@@ -32,6 +34,16 @@ def optimise_lateral_offset(
     buffer: float = 0.0,
     method: str = "SLSQP",
     max_iterations: int | None = None,
+    cost: str = "curvature",
+    mu: float = 1.0,
+    a_wheelie_max: float = 9.81,
+    a_brake: float = 9.81,
+    v_start: float | None = None,
+    v_end: float | None = None,
+    closed_loop: bool = False,
+    g: float = 9.81,
+    speed_max_iterations: int = 50,
+    speed_tol: float = 1e-3,
 ) -> tuple[LateralOffsetSpline, int]:
     """Optimise lateral offset control points for a racing line.
 
@@ -62,6 +74,13 @@ def optimise_lateral_offset(
         ``maxiter`` in the ``options`` argument to
         :func:`scipy.optimize.minimize`. If ``None``, SciPy's default is
         used.
+    cost:
+        Objective to minimise. ``"curvature"`` minimises the integral of the
+        squared curvature and its derivative. ``"lap_time"`` minimises the
+        lap time computed by :func:`speed_solver.solve_speed_profile`.
+    mu, a_wheelie_max, a_brake, v_start, v_end, closed_loop, g, speed_max_iterations, speed_tol:
+        Parameters forwarded to :func:`speed_solver.solve_speed_profile` when
+        ``cost='lap_time'``.
 
     Returns
     -------
@@ -92,13 +111,32 @@ def optimise_lateral_offset(
     upper_bound = half_width - buffer
     lower_bound = -upper_bound
 
+    if cost not in {"curvature", "lap_time"}:
+        raise ValueError("cost must be 'curvature' or 'lap_time'")
+
     def objective(e_ctrl: np.ndarray) -> float:
         spline = LateralOffsetSpline(s_control, e_ctrl)
         kappa = path_curvature(s, spline, kappa_c)
-        dkappa_ds = np.gradient(kappa, s, edge_order=2)
-        integrand = kappa**2 + dkappa_ds**2
-        # np.trapz is used for backward compatibility.
-        return float(np.trapz(integrand, s))
+        if cost == "curvature":
+            dkappa_ds = np.gradient(kappa, s, edge_order=2)
+            integrand = kappa**2 + dkappa_ds**2
+            # np.trapz is used for backward compatibility.
+            return float(np.trapz(integrand, s))
+        else:  # cost == "lap_time"
+            _, _, _, _, lap_time, _, _ = speed_solver.solve_speed_profile(
+                s,
+                kappa,
+                mu,
+                a_wheelie_max,
+                a_brake,
+                v_start=v_start,
+                v_end=v_end,
+                closed_loop=closed_loop,
+                g=g,
+                max_iterations=speed_max_iterations,
+                tol=speed_tol,
+            )
+            return float(lap_time)
 
     if method == "trust-constr":
         def eval_e(e_ctrl: np.ndarray) -> np.ndarray:
