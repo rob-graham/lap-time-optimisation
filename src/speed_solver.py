@@ -21,6 +21,7 @@ def solve_speed_profile(
     a_wheelie_max: float,
     a_brake: float,
     v_init: Iterable[float] | None = None,
+    closed_loop: bool = False,
     g: float = 9.81,
     max_iterations: int = 50,
     tol: float = 1e-3,
@@ -43,6 +44,9 @@ def solve_speed_profile(
     v_init:
         Optional initial guess for the speed profile.  If ``None`` a profile
         based on the lateral acceleration limit ``mu * g`` is used.
+    closed_loop:
+        If ``True`` the path is treated as a closed loop and the solver iterates
+        until the initial and final speeds converge to the same value.
     g:
         Gravitational acceleration in ``m/s^2``.
     max_iterations:
@@ -78,13 +82,17 @@ def solve_speed_profile(
         v = np.asarray(v_init, dtype=float)
         if v.shape != s.shape:
             raise ValueError("v_init must have the same shape as s")
-    # Enforce boundary conditions of starting and ending at rest.
-    v[0] = 0.0
-    v[-1] = 0.0
+    if not closed_loop:
+        # Enforce boundary conditions of starting and ending at rest.
+        v[0] = 0.0
+        v[-1] = 0.0
 
     mu_g = mu * g
     for _ in range(max_iterations):
         v_prev = v.copy()
+        if closed_loop:
+            common = min(v[0], v[-1])
+            v[0] = v[-1] = common
         ay = v**2 * kappa
 
         # Longitudinal acceleration limits from friction ellipse.
@@ -106,9 +114,16 @@ def solve_speed_profile(
             if v_prev_allowed < v[i - 1]:
                 v[i - 1] = v_prev_allowed
 
-        if np.max(np.abs(v - v_prev)) < tol:
-            break
+        if closed_loop:
+            if np.max(np.abs(v - v_prev)) < tol and abs(v[0] - v[-1]) < tol:
+                break
+        else:
+            if np.max(np.abs(v - v_prev)) < tol:
+                break
 
+    if closed_loop:
+        common = min(v[0], v[-1])
+        v[0] = v[-1] = common
     ay = v**2 * kappa
     ax = 0.5 * np.gradient(v**2, s, edge_order=2)
     return v, ax, ay
