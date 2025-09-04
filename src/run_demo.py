@@ -6,6 +6,15 @@ Running ``python -m src.run_demo`` executes a simple workflow that
 parses a track layout, optimises a racing line and computes a feasible
 speed profile.  Results are written to time-stamped CSV files under the
 ``outputs`` directory.
+
+Two CSV files are produced for each run:
+
+``geometry.csv``
+    Discretised centreline with heading, curvature and track edge
+    coordinates.
+``results.csv``
+    Optimised path coordinates, speed profile and duplicated track edges
+    for convenience.
 """
 
 from pathlib import Path
@@ -45,7 +54,6 @@ def run(
     geom = load_track_layout(track_file, ds, closed=closed)
     x, y, psi, kappa_c = geom.x, geom.y, geom.heading, geom.curvature
     left_edge, right_edge = geom.left_edge, geom.right_edge
-    inner_edge, outer_edge = geom.inner_edge, geom.outer_edge
     s = np.arange(x.size) * ds
 
     # Path optimisation
@@ -104,10 +112,6 @@ def run(
             "y_left_m": left_edge[:, 1],
             "x_right_m": right_edge[:, 0],
             "y_right_m": right_edge[:, 1],
-            "x_inner_m": inner_edge[:, 0],
-            "y_inner_m": inner_edge[:, 1],
-            "x_outer_m": outer_edge[:, 0],
-            "y_outer_m": outer_edge[:, 1],
         }
     )
     results_df = pd.DataFrame(
@@ -115,6 +119,10 @@ def run(
             "s_m": s,
             "x_path_m": x_path,
             "y_path_m": y_path,
+            "x_left_m": left_edge[:, 0],
+            "y_left_m": left_edge[:, 1],
+            "x_right_m": right_edge[:, 0],
+            "y_right_m": right_edge[:, 1],
             "offset_m": offset,
             "curvature_1pm": kappa_path,
             "speed_mps": v,

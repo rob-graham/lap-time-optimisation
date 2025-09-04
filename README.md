@@ -39,6 +39,14 @@ columns ``x_m``, ``y_m``, ``section_type`` and ``radius_m`` define the geometry
 while ``width_m`` gives the track width used to compute the left and right
 edges.
 
+Each run writes two CSV files in a time-stamped folder under ``outputs``:
+
+``geometry.csv``
+    Discretised centreline with heading, curvature and track edges.
+``results.csv``
+    Optimised path with speed profile and the same track edges for
+    convenience.
+
 ## License
 
 MIT License (to be defined).
