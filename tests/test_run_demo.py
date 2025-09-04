@@ -35,6 +35,8 @@ def test_one_corner_track_open_track() -> None:
     assert np.isclose(length, 327.0, atol=1e-6)
     for col in ["x_left_m", "y_left_m", "x_right_m", "y_right_m"]:
         assert col in geom.columns
+    for col in ["x_inner_m", "y_inner_m", "x_outer_m", "y_outer_m"]:
+        assert col not in geom.columns
     results = pd.read_csv(out_dir / "results.csv")
     for col in ["x_left_m", "y_left_m", "x_right_m", "y_right_m"]:
         assert col in results.columns
