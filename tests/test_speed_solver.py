@@ -14,7 +14,7 @@ from io_utils import read_bike_params_csv
 def test_straight_line_profile() -> None:
     s = np.linspace(0.0, 100.0, 11)
     kappa = np.zeros_like(s)
-    v, ax, ay, limit, lap_time = solve_speed_profile(
+    v, ax, ay, limit, lap_time, iterations, elapsed_s = solve_speed_profile(
         s,
         kappa,
         mu=1.2,
@@ -38,6 +38,8 @@ def test_straight_line_profile() -> None:
     assert limit[mid] == "wheelie"
     assert limit[-2] == "stoppie"
     assert limit[-1] == "braking"
+    assert iterations >= 1
+    assert elapsed_s >= 0.0
 
 
 def test_straight_line_low_initial_speed_accelerates() -> None:
@@ -45,7 +47,7 @@ def test_straight_line_low_initial_speed_accelerates() -> None:
     kappa = np.zeros_like(s)
     v_init = np.zeros_like(s)
     v_init_orig = v_init.copy()
-    v, ax, ay, limit, lap_time = solve_speed_profile(
+    v, ax, ay, limit, lap_time, _, _ = solve_speed_profile(
         s,
         kappa,
         mu=1.2,
@@ -70,7 +72,7 @@ def test_circular_track_speed_limit() -> None:
     kappa[:200] = 0.0
     kappa[-200:] = 0.0
     mu = 1.2
-    v, ax, ay, limit, lap_time = solve_speed_profile(
+    v, ax, ay, limit, lap_time, _, _ = solve_speed_profile(
         s,
         kappa,
         mu=mu,
@@ -88,7 +90,7 @@ def test_closed_circular_track_convergence() -> None:
     geom = load_track_layout(str(base_path / "data" / "track_layout.csv"), ds=1.0)
     params = read_bike_params_csv(base_path / "data" / "bike_params_r6.csv")
     s = np.arange(geom.x.size)
-    v, ax, ay, limit, lap_time = solve_speed_profile(
+    v, ax, ay, limit, lap_time, _, _ = solve_speed_profile(
         s,
         geom.curvature,
         mu=params["mu"],
@@ -112,7 +114,7 @@ def test_open_track_has_free_end_speeds() -> None:
     geom = load_track_layout(base_path / "data" / "oneCornerTrack.csv", ds=1.0, closed=False)
     params = read_bike_params_csv(base_path / "data" / "bike_params_r6.csv")
     s = np.arange(geom.x.size)
-    v, ax, ay, limit, lap_time = solve_speed_profile(
+    v, ax, ay, limit, lap_time, _, _ = solve_speed_profile(
         s,
         geom.curvature,
         mu=params["mu"],

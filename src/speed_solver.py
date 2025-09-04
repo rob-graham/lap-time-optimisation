@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Iterable, Tuple
 
 import numpy as np
+import time
 
 
 def solve_speed_profile(
@@ -27,7 +28,7 @@ def solve_speed_profile(
     g: float = 9.81,
     max_iterations: int = 50,
     tol: float = 1e-3,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, int, float]:
     r"""Solve for the feasible speed profile along a path.
 
     Parameters
@@ -62,13 +63,14 @@ def solve_speed_profile(
 
     Returns
     -------
-    Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float]
+    Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, int, float]
         Arrays of speed ``v``, longitudinal acceleration ``ax`` and lateral
         acceleration ``ay`` sampled at ``s`` along with a string array
         ``limit`` describing the active constraint at each sample
         (``"corner"``, ``"accel"``, ``"braking"``, ``"wheelie"`` or
-        ``"stoppie"``) and the total ``lap_time`` obtained by integrating
-        ``ds / v``.
+        ``"stoppie"``), the total ``lap_time`` obtained by integrating
+        ``ds / v``, the number of iterations performed and the solver
+        runtime ``elapsed_s`` in seconds.
     """
     s = np.asarray(s, dtype=float)
     kappa = np.asarray(kappa, dtype=float)
@@ -108,7 +110,10 @@ def solve_speed_profile(
     limit_forward = np.full(n, "", dtype=object)
     limit_backward = np.full(n, "", dtype=object)
 
+    iterations = 0
+    start_time = time.perf_counter()
     for _ in range(max_iterations):
+        iterations += 1
         # reset limit trackers for this iteration
         limit_forward.fill("")
         limit_backward.fill("")
@@ -200,6 +205,8 @@ def solve_speed_profile(
             if np.max(np.abs(v - v_prev)) < tol:
                 break
 
+    elapsed_s = time.perf_counter() - start_time
+
     ay = v**2 * kappa
     ax = 0.5 * np.gradient(v**2, s, edge_order=2)
 
@@ -227,4 +234,4 @@ def solve_speed_profile(
     v_avg = 0.5 * (v[:-1] + v[1:])
     lap_time = float(np.sum(ds / np.maximum(v_avg, 1e-9)))
 
-    return v, ax, ay, limit, lap_time
+    return v, ax, ay, limit, lap_time, iterations, elapsed_s
