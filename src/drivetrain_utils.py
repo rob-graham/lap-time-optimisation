@@ -41,11 +41,17 @@ def select_gear(
     final_drive: float,
     rw: float,
 ) -> float:
-    """Return the highest gear ratio that keeps engine RPM below the shift point."""
-    for g in reversed(gears):
+    """Return the highest gear ratio that keeps engine RPM below ``shift_rpm``."""
+
+    # ``gears`` is expected to be ordered from lowest to highest gear number
+    # (i.e. highest to lowest ratio).  Iterate in this order and select the
+    # first gear whose engine speed does not exceed the shift point.  If the
+    # engine would exceed ``shift_rpm`` even in the highest gear, fall back to
+    # that top gear rather than an unrealistic first-gear default.
+    for g in gears:
         if engine_rpm(v_mps, primary, final_drive, g, rw) <= shift_rpm:
             return g
-    return gears[0]
+    return gears[-1]
 
 
 __all__ = ["engine_rpm", "select_gear"]
