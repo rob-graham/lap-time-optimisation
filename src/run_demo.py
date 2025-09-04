@@ -49,7 +49,10 @@ def run(track_file: str, bike_file: str, ds: float, buffer: float, n_ctrl: int) 
     mu = float(bike_params.get("mu", 1.0))
     a_wheelie_max = float(bike_params.get("a_wheelie_max", 9.81))
     a_brake = float(bike_params.get("a_brake", 9.81))
-    v, ax, ay = solve_speed_profile(s, kappa_path, mu, a_wheelie_max, a_brake)
+    closed = np.hypot(x[0] - x[-1], y[0] - y[-1]) <= ds
+    v, ax, ay = solve_speed_profile(
+        s, kappa_path, mu, a_wheelie_max, a_brake, closed_loop=closed
+    )
 
     # Write outputs
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

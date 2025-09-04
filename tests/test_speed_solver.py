@@ -7,6 +7,8 @@ import numpy as np
 sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 
 from speed_solver import solve_speed_profile
+from geometry import load_track_layout
+from io_utils import read_bike_params_csv
 
 
 def test_straight_line_profile() -> None:
@@ -48,3 +50,20 @@ def test_circular_track_speed_limit() -> None:
     expected = np.sqrt(mu * 9.81 * R)
     mid = len(s) // 2
     assert np.isclose(v[mid], expected, atol=0.5)
+
+
+def test_closed_circular_track_convergence() -> None:
+    base_path = Path(__file__).resolve().parents[1]
+    geom = load_track_layout(str(base_path / "data" / "track_layout.csv"), ds=1.0)
+    params = read_bike_params_csv(base_path / "data" / "bike_params_r6.csv")
+    s = np.arange(geom.x.size)
+    v, ax, ay = solve_speed_profile(
+        s,
+        geom.curvature,
+        mu=params["mu"],
+        a_wheelie_max=params["a_wheelie_max"],
+        a_brake=params["a_brake"],
+        closed_loop=True,
+    )
+    assert np.isclose(v[0], v[-1], atol=1e-3)
+    assert np.isclose(v.max(), 50.0, atol=15.0)
