@@ -167,7 +167,7 @@ def main(argv: list[str] | None = None) -> None:
         args.ctrl_points,
         closed=args.closed,
     )
-    print(f"Lap time: {lap_time:.3f} s")
+    print(f"Lap time: {lap_time:.2f} s")
     print(f"Outputs written to {out_dir}")
 
 
