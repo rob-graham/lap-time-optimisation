@@ -71,6 +71,13 @@ def solve_speed_profile(
 
     n = s.size
     ds = np.diff(s)
+    if closed_loop:
+        # Estimate the segment length connecting the last point back to the
+        # start to close the loop.  The grid is assumed to have approximately
+        # uniform spacing so the first step is representative.
+        if n < 2:
+            raise ValueError("closed loop requires at least two points")
+        ds_wrap = float(s[1] - s[0])
 
     if v_init is None:
         # Initial guess limited only by lateral grip.
@@ -90,9 +97,6 @@ def solve_speed_profile(
     mu_g = mu * g
     for _ in range(max_iterations):
         v_prev = v.copy()
-        if closed_loop:
-            common = min(v[0], v[-1])
-            v[0] = v[-1] = common
         ay = v**2 * kappa
 
         # Longitudinal acceleration limits from friction ellipse.
@@ -101,29 +105,42 @@ def solve_speed_profile(
         ax_max = np.minimum(ax_friction, a_wheelie_max)
         ax_min = -np.minimum(np.sqrt(np.maximum(a_brake**2 - ay_sq, 0.0)), a_brake)
 
-        # Forward pass (acceleration)
-        for i in range(n - 1):
-            v_next = np.sqrt(max(v[i] ** 2 + 2.0 * ax_max[i] * ds[i], 0.0))
-            if v_next < v[i + 1]:
-                v[i + 1] = v_next
-        # Backward pass (braking)
-        for i in range(n - 1, 0, -1):
-            v_prev_allowed = np.sqrt(
-                max(v[i] ** 2 - 2.0 * ax_min[i - 1] * ds[i - 1], 0.0)
-            )
-            if v_prev_allowed < v[i - 1]:
-                v[i - 1] = v_prev_allowed
+        if closed_loop:
+            # Forward pass across the wrap-around segment
+            for i in range(n):
+                j = (i + 1) % n
+                seg_len = ds[i] if i < n - 1 else ds_wrap
+                v_next = np.sqrt(max(v[i] ** 2 + 2.0 * ax_max[i] * seg_len, 0.0))
+                if v_next < v[j]:
+                    v[j] = v_next
+            # Backward pass across the wrap-around segment
+            for i in range(n - 1, -1, -1):
+                j = (i - 1) % n
+                seg_len = ds[j] if j < n - 1 else ds_wrap
+                v_prev_allowed = np.sqrt(
+                    max(v[i] ** 2 - 2.0 * ax_min[j] * seg_len, 0.0)
+                )
+                if v_prev_allowed < v[j]:
+                    v[j] = v_prev_allowed
+        else:
+            # Forward pass (acceleration)
+            for i in range(n - 1):
+                v_next = np.sqrt(max(v[i] ** 2 + 2.0 * ax_max[i] * ds[i], 0.0))
+                if v_next < v[i + 1]:
+                    v[i + 1] = v_next
+            # Backward pass (braking)
+            for i in range(n - 1, 0, -1):
+                v_prev_allowed = np.sqrt(
+                    max(v[i] ** 2 - 2.0 * ax_min[i - 1] * ds[i - 1], 0.0)
+                )
+                if v_prev_allowed < v[i - 1]:
+                    v[i - 1] = v_prev_allowed
 
         if closed_loop:
-            if np.max(np.abs(v - v_prev)) < tol and abs(v[0] - v[-1]) < tol:
-                break
-        else:
-            if np.max(np.abs(v - v_prev)) < tol:
-                break
-
-    if closed_loop:
-        common = min(v[0], v[-1])
-        v[0] = v[-1] = common
+            v_edge = 0.5 * (v[0] + v[-1])
+            v[0] = v[-1] = v_edge
+        if np.max(np.abs(v - v_prev)) < tol:
+            break
     ay = v**2 * kappa
     ax = 0.5 * np.gradient(v**2, s, edge_order=2)
     return v, ax, ay

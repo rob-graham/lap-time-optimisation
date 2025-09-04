@@ -66,4 +66,11 @@ def test_closed_circular_track_convergence() -> None:
         closed_loop=True,
     )
     assert np.isclose(v[0], v[-1], atol=1e-3)
+    # Speeds should vary around the lap on a closed loop.
+    assert np.ptp(v) > 1.0
+    straight = np.isclose(geom.curvature, 0.0)
+    # Ensure the track contains straight sections and that the solver applies
+    # acceleration or braking on them.
+    assert straight.any()
+    assert not np.allclose(ax[straight], 0.0)
     assert np.isclose(v.max(), 50.0, atol=15.0)
