@@ -11,6 +11,7 @@ speed profile.  Results are written to time-stamped CSV files under the
 from pathlib import Path
 from datetime import datetime
 import argparse
+import json
 
 import numpy as np
 import pandas as pd
@@ -122,6 +123,11 @@ def run(
 
     write_csv(geometry_df, out_dir / "geometry.csv")
     write_csv(results_df, out_dir / "results.csv")
+
+    # Store a simple summary so tests and consumers can easily access the
+    # overall lap time without parsing the full CSV results.
+    with (out_dir / "summary.json").open("w") as f:
+        json.dump({"lap_time_s": lap_time}, f)
 
     return lap_time, out_dir
 
