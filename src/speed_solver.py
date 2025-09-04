@@ -84,12 +84,16 @@ def solve_speed_profile(
     if closed_loop and n < 2:
         raise ValueError("closed loop requires at least two points")
 
+    mu_g = mu * g
+    kappa_mask = np.abs(kappa) > 1e-9
+    v_lat = np.full_like(kappa, np.inf)
+    np.divide(mu_g, np.abs(kappa), out=v_lat, where=kappa_mask)
+    np.sqrt(v_lat, out=v_lat, where=kappa_mask)
+
     if v_init is None:
         # Initial guess limited only by lateral grip.
-        v = np.empty_like(s)
-        mask = np.abs(kappa) > 1e-9
-        v[mask] = np.sqrt(mu * g / np.abs(kappa[mask]))
-        v[~mask] = 1e3
+        v = np.full_like(s, 1e3)
+        v[kappa_mask] = v_lat[kappa_mask]
     else:
         v = np.asarray(v_init, dtype=float)
         if v.shape != s.shape:
@@ -100,7 +104,6 @@ def solve_speed_profile(
         if v_end is not None:
             v[-1] = float(v_end)
 
-    mu_g = mu * g
     # Arrays used to record limiting factors during the passes
     limit_forward = np.full(n, "", dtype=object)
     limit_backward = np.full(n, "", dtype=object)
@@ -117,11 +120,11 @@ def solve_speed_profile(
                 v[-1] = float(v_end)
 
         # Enforce lateral acceleration limits before the passes
-        mask = np.abs(kappa) > 1e-9
-        v_lat_all = np.sqrt(mu_g / np.abs(kappa[mask]))
-        v_before = v[mask].copy()
-        v[mask] = np.minimum(v[mask], v_lat_all)
-        limit_forward[mask] = np.where(v[mask] < v_before, "corner", limit_forward[mask])
+        v_before = v[kappa_mask].copy()
+        v[kappa_mask] = np.minimum(v[kappa_mask], v_lat[kappa_mask])
+        limit_forward[kappa_mask] = np.where(
+            v[kappa_mask] < v_before, "corner", limit_forward[kappa_mask]
+        )
 
         v_prev = v.copy()
         ay = v**2 * kappa
@@ -136,10 +139,10 @@ def solve_speed_profile(
         for i in range(n - 1):
             v_next = np.sqrt(max(v[i] ** 2 + 2.0 * ax_max[i] * ds[i], 0.0))
             limit_type: str
-            if np.abs(kappa[i + 1]) > 1e-9:
-                v_lat = np.sqrt(mu_g / abs(kappa[i + 1]))
-                if v_next > v_lat:
-                    v_next = v_lat
+            if kappa_mask[i + 1]:
+                v_lat_next = v_lat[i + 1]
+                if v_next > v_lat_next:
+                    v_next = v_lat_next
                     limit_type = "corner"
                 else:
                     if np.isclose(ax_max[i], a_wheelie_max) and a_wheelie_max <= ax_friction[i] + 1e-6:
@@ -163,9 +166,11 @@ def solve_speed_profile(
             v[-1] = float(v_end)
 
         # Enforce lateral limits again after forward pass
-        v_before = v[mask].copy()
-        v[mask] = np.minimum(v[mask], v_lat_all)
-        limit_forward[mask] = np.where(v[mask] < v_before, "corner", limit_forward[mask])
+        v_before = v[kappa_mask].copy()
+        v[kappa_mask] = np.minimum(v[kappa_mask], v_lat[kappa_mask])
+        limit_forward[kappa_mask] = np.where(
+            v[kappa_mask] < v_before, "corner", limit_forward[kappa_mask]
+        )
 
         # Backward pass (braking)
         for i in range(n - 1, 0, -1):
@@ -207,8 +212,8 @@ def solve_speed_profile(
     limit[b_mask] = limit_backward[b_mask]
 
     # Ensure cornering limits are flagged where speed hits lateral bound
-    corner_mask = (np.abs(kappa) > 1e-9) & np.isclose(
-        v, np.sqrt(mu_g / np.abs(kappa)), rtol=1e-3, atol=1e-2
+    corner_mask = kappa_mask & np.isclose(
+        v, v_lat, rtol=1e-3, atol=1e-2
     )
     limit[corner_mask] = "corner"
 
