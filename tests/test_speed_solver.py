@@ -20,6 +20,8 @@ def test_straight_line_profile() -> None:
         mu=1.2,
         a_wheelie_max=9.81,
         a_brake=11.772,
+        v_start=0.0,
+        v_end=0.0,
     )
     assert v.shape == s.shape
     assert np.allclose(ay, 0.0)
@@ -44,6 +46,8 @@ def test_straight_line_low_initial_speed_accelerates() -> None:
         a_wheelie_max=9.81,
         a_brake=11.772,
         v_init=v_init,
+        v_start=0.0,
+        v_end=0.0,
     )
     mid = len(s) // 2
     expected_vmax = np.sqrt(9.81 * 100.0)
@@ -94,3 +98,23 @@ def test_closed_circular_track_convergence() -> None:
     assert straight.any()
     assert np.any(np.abs(ax[straight]) > 0.1)
     assert np.isclose(v.max(), 50.0, atol=15.0)
+
+
+def test_open_track_has_free_end_speeds() -> None:
+    base_path = Path(__file__).resolve().parents[1]
+    geom = load_track_layout(base_path / "data" / "oneCornerTrack.csv", ds=1.0, closed=False)
+    params = read_bike_params_csv(base_path / "data" / "bike_params_r6.csv")
+    s = np.arange(geom.x.size)
+    v, ax, ay = solve_speed_profile(
+        s,
+        geom.curvature,
+        mu=params["mu"],
+        a_wheelie_max=params["a_wheelie_max"],
+        a_brake=params["a_brake"],
+    )
+    assert v[0] > 0.0
+    assert v[-1] > 0.0
+    corner_idx = np.where(np.abs(geom.curvature) > 0)[0][0]
+    assert np.argmin(v) == corner_idx
+    assert v[corner_idx] < v[0]
+    assert v[corner_idx] < v[-1]

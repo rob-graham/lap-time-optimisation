@@ -101,7 +101,7 @@ def load_track(file_path: str, ds: float) -> Tuple[np.ndarray, np.ndarray, np.nd
     return x_s, y_s, heading, curvature, left_edge, right_edge
 
 
-def load_track_layout(path: str, ds: float) -> TrackGeometry:
+def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometry:
     """Load a structured ``track_layout.csv`` file.
 
     Parameters
@@ -113,6 +113,9 @@ def load_track_layout(path: str, ds: float) -> TrackGeometry:
         radius.
     ds:
         Desired arc-length spacing for discretisation.
+    closed:
+        Whether to connect the final node back to the first.  Set ``False`` for
+        open tracks.
 
     Returns
     -------
@@ -136,16 +139,22 @@ def load_track_layout(path: str, ds: float) -> TrackGeometry:
     width_list: list[np.ndarray] = []
 
     n = len(df)
-    for i in range(n):
+    n_segments = n if closed else n - 1
+    for i in range(n_segments):
         x0, y0 = x_nodes[i], y_nodes[i]
-        x1, y1 = x_nodes[(i + 1) % n], y_nodes[(i + 1) % n]
-        w0, w1 = width_nodes[i], width_nodes[(i + 1) % n]
+        if closed:
+            x1, y1 = x_nodes[(i + 1) % n], y_nodes[(i + 1) % n]
+            w0, w1 = width_nodes[i], width_nodes[(i + 1) % n]
+        else:
+            x1, y1 = x_nodes[i + 1], y_nodes[i + 1]
+            w0, w1 = width_nodes[i], width_nodes[i + 1]
         seg_type = section_types[i].lower()
 
         if seg_type == "straight":
             dx, dy = x1 - x0, y1 - y0
             seg_len = float(np.hypot(dx, dy))
-            s_local = np.arange(0.0, seg_len, ds)
+            extra = ds if (not closed and i == n_segments - 1) else 0.0
+            s_local = np.arange(0.0, seg_len + extra, ds)
             if i != 0:
                 s_local = s_local[1:]
             ratio = s_local / seg_len
@@ -168,7 +177,8 @@ def load_track_layout(path: str, ds: float) -> TrackGeometry:
             phi0 = np.arctan2(y0 - centre[1], x0 - centre[0])
             theta = 2.0 * np.arcsin(chord / (2.0 * R)) * np.sign(r)
             seg_len = abs(R * theta)
-            s_local = np.arange(0.0, seg_len, ds)
+            extra = ds if (not closed and i == n_segments - 1) else 0.0
+            s_local = np.arange(0.0, seg_len + extra, ds)
             if i != 0:
                 s_local = s_local[1:]
             phi = phi0 + s_local / r
