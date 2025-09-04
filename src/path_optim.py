@@ -90,7 +90,8 @@ def optimise_lateral_offset(
         kappa = path_curvature(s, spline, kappa_c)
         dkappa_ds = np.gradient(kappa, s, edge_order=2)
         integrand = kappa**2 + dkappa_ds**2
-        return float(np.trapezoid(integrand, s))
+        # np.trapz is used for backward compatibility.
+        return float(np.trapz(integrand, s))
 
     if method == "trust-constr":
         def eval_e(e_ctrl: np.ndarray) -> np.ndarray:
