@@ -34,6 +34,7 @@ def optimise_lateral_offset(
     buffer: float = 0.0,
     method: str = "SLSQP",
     max_iterations: int | None = None,
+    fd_step: float | None = None,
     cost: str = "curvature",
     mu: float = 1.0,
     a_wheelie_max: float = 9.81,
@@ -75,6 +76,11 @@ def optimise_lateral_offset(
     max_iterations:
         Maximum number of iterations for the optimiser. Passed as
         ``maxiter`` in the ``options`` argument to
+        :func:`scipy.optimize.minimize`. If ``None``, SciPy's default is
+        used.
+    fd_step:
+        Step size for the finite-difference gradient approximation passed as
+        ``eps`` in the ``options`` argument to
         :func:`scipy.optimize.minimize`. If ``None``, SciPy's default is
         used.
     cost:
@@ -177,7 +183,14 @@ def optimise_lateral_offset(
 
         constraints = {"type": "ineq", "fun": inequality}
 
-    options = {"maxiter": max_iterations} if max_iterations is not None else None
+    options = {}
+    if max_iterations is not None:
+        options["maxiter"] = max_iterations
+    if fd_step is not None:
+        options["eps"] = fd_step
+    if not options:
+        options = None
+
     result = minimize(
         objective,
         e_init,
