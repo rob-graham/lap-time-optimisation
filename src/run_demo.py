@@ -29,8 +29,8 @@ def run(
     buffer: float,
     n_ctrl: int,
     closed: bool | None = None,
-) -> Path:
-    """Execute the optimisation pipeline and return the output directory."""
+) -> tuple[float, Path]:
+    """Execute the optimisation pipeline and return lap time and output directory."""
     # Load input data
     df = read_track_csv(track_file)
     bike_params = read_bike_params_csv(bike_file)
@@ -61,9 +61,35 @@ def run(
     mu = float(bike_params.get("mu", 1.0))
     a_wheelie_max = float(bike_params.get("a_wheelie_max", 9.81))
     a_brake = float(bike_params.get("a_brake", 9.81))
-    v, ax, ay = solve_speed_profile(
+    primary = float(bike_params.get("primary", 1.0))
+    final_drive = float(bike_params.get("final_drive", 1.0))
+    rw = float(bike_params.get("rw", 1.0))
+    shift_rpm = float(bike_params.get("shift_rpm", 1e9))
+    gears = [
+        float(v)
+        for k, v in sorted(bike_params.items())
+        if k.startswith("gear")
+    ]
+
+    def engine_rpm(v_mps: float, gear_ratio: float) -> float:
+        omega_w = v_mps / rw
+        omega_e = omega_w * primary * final_drive * gear_ratio
+        return omega_e * 60.0 / (2 * np.pi)
+
+    def select_gear(v_mps: float) -> int:
+        for i in range(len(gears) - 1, -1, -1):
+            if engine_rpm(v_mps, gears[i]) <= shift_rpm:
+                return i + 1
+        return 1
+
+    v, ax, ay, limit = solve_speed_profile(
         s, kappa_path, mu, a_wheelie_max, a_brake, closed_loop=closed
     )
+
+    speed_kph = v * 3.6
+    gear_idx = np.array([select_gear(vi) for vi in v], dtype=int)
+    gear_ratio = np.array([gears[g - 1] for g in gear_idx])
+    rpm = np.array([engine_rpm(vi, gr) for vi, gr in zip(v, gear_ratio)])
 
     # Write outputs
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -91,14 +117,22 @@ def run(
             "offset_m": offset,
             "curvature_1pm": kappa_path,
             "speed_mps": v,
+            "speed_kph": speed_kph,
+            "gear": gear_idx,
+            "rpm": rpm,
             "ax_mps2": ax,
             "ay_mps2": ay,
+            "limit": limit,
         }
     )
 
     write_csv(geometry_df, out_dir / "geometry.csv")
     write_csv(results_df, out_dir / "results.csv")
-    return out_dir
+
+    ds_arr = np.diff(s)
+    v_avg = 0.5 * (v[:-1] + v[1:])
+    lap_time = float(np.sum(ds_arr / np.maximum(v_avg, 1e-9)))
+    return lap_time, out_dir
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -128,7 +162,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.set_defaults(closed=None)
     args = parser.parse_args(argv)
 
-    out_dir = run(
+    lap_time, out_dir = run(
         args.track,
         args.bike,
         args.ds,
@@ -136,6 +170,7 @@ def main(argv: list[str] | None = None) -> None:
         args.ctrl_points,
         closed=args.closed,
     )
+    print(f"Lap time: {lap_time:.3f} s")
     print(f"Outputs written to {out_dir}")
 
 

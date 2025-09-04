@@ -27,7 +27,7 @@ def solve_speed_profile(
     g: float = 9.81,
     max_iterations: int = 50,
     tol: float = 1e-3,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     r"""Solve for the feasible speed profile along a path.
 
     Parameters
@@ -62,9 +62,12 @@ def solve_speed_profile(
 
     Returns
     -------
-    Tuple[np.ndarray, np.ndarray, np.ndarray]
+    Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
         Arrays of speed ``v``, longitudinal acceleration ``ax`` and lateral
-        acceleration ``ay`` sampled at ``s``.
+        acceleration ``ay`` sampled at ``s`` along with a string array
+        ``limit`` describing which constraint is active at each sample
+        (``"corner"``, ``"accel"``, ``"braking"``, ``"wheelie"`` or
+        ``"stoppie"``).
     """
     s = np.asarray(s, dtype=float)
     kappa = np.asarray(kappa, dtype=float)
@@ -150,4 +153,34 @@ def solve_speed_profile(
                 break
     ay = v**2 * kappa
     ax = 0.5 * np.gradient(v**2, s, edge_order=2)
-    return v, ax, ay
+
+    # Determine the limiting factor at each sample.
+    limit = np.empty(n, dtype=object)
+    ay_sq = ay**2
+    for i in range(n):
+        # Check if lateral grip limits the speed at this point.
+        if np.abs(kappa[i]) > 1e-9 and np.isclose(
+            v[i], np.sqrt(mu_g / np.abs(kappa[i])), rtol=1e-3, atol=1e-2
+        ):
+            limit[i] = "corner"
+            continue
+
+        # Friction ellipse limit for longitudinal acceleration.
+        ax_fric = np.sqrt(max(mu_g**2 - ay_sq[i], 0.0))
+        if ax[i] >= 0.0:
+            if np.isclose(ax[i], a_wheelie_max, rtol=1e-3, atol=1e-2) and a_wheelie_max <= ax_fric + 1e-6:
+                limit[i] = "wheelie"
+            elif np.isclose(ax[i], ax_fric, rtol=1e-3, atol=1e-2):
+                limit[i] = "corner"
+            else:
+                limit[i] = "accel"
+        else:
+            dec = -ax[i]
+            if np.isclose(dec, a_brake, rtol=1e-3, atol=1e-2) and a_brake <= ax_fric + 1e-6:
+                limit[i] = "stoppie"
+            elif np.isclose(dec, ax_fric, rtol=1e-3, atol=1e-2):
+                limit[i] = "corner"
+            else:
+                limit[i] = "braking"
+
+    return v, ax, ay, limit
