@@ -40,6 +40,7 @@ def run(
     ds: float,
     buffer: float,
     n_ctrl: int,
+    cost: str = "curvature",
     closed: bool | None = None,
     max_iter: int | None = None,
 ) -> tuple[float, Path]:
@@ -47,6 +48,9 @@ def run(
 
     Parameters
     ----------
+    cost:
+        Objective used for path optimisation. Forwarded to
+        :func:`optimise_lateral_offset`.
     max_iter:
         Maximum iterations for the path optimisation step. Forwarded to
         :func:`optimise_lateral_offset`.
@@ -67,6 +71,11 @@ def run(
     left_edge, right_edge = geom.left_edge, geom.right_edge
     s = np.arange(x.size) * ds
 
+    # Speed solver parameters needed for lap-time optimisation
+    mu = float(bike_params.get("mu", 1.0))
+    a_wheelie_max = float(bike_params.get("a_wheelie_max", 9.81))
+    a_brake = float(bike_params.get("a_brake", 9.81))
+
     # Path optimisation
     s_control = np.linspace(s[0], s[-1], n_ctrl)
     offset_spline, opt_iterations = optimise_lateral_offset(
@@ -77,6 +86,11 @@ def run(
         s_control,
         buffer=buffer,
         max_iterations=max_iter,
+        cost=cost,
+        mu=mu,
+        a_wheelie_max=a_wheelie_max,
+        a_brake=a_brake,
+        closed_loop=closed,
     )
     offset = offset_spline(s)
     kappa_path = path_curvature(s, offset_spline, kappa_c)
@@ -86,9 +100,6 @@ def run(
     y_path = y + offset * normal_y
 
     # Speed solver
-    mu = float(bike_params.get("mu", 1.0))
-    a_wheelie_max = float(bike_params.get("a_wheelie_max", 9.81))
-    a_brake = float(bike_params.get("a_brake", 9.81))
     primary = float(bike_params.get("primary", 1.0))
     final_drive = float(bike_params.get("final_drive", 1.0))
     rw = float(bike_params.get("rw", 1.0))
@@ -185,6 +196,12 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         help="Maximum iterations for path optimisation",
     )
+    parser.add_argument(
+        "--cost",
+        choices=["curvature", "lap_time"],
+        default="curvature",
+        help="Cost function for path optimisation",
+    )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
         "--open",
@@ -214,6 +231,7 @@ def main(argv: list[str] | None = None) -> None:
         args.ds,
         args.buffer,
         args.ctrl_points,
+        cost=args.cost,
         closed=args.closed,
         max_iter=args.max_iter,
     )
