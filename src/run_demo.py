@@ -25,10 +25,14 @@ from .speed_solver import solve_speed_profile
 def run(track_file: str, bike_file: str, ds: float, buffer: float, n_ctrl: int) -> Path:
     """Execute the optimisation pipeline and return the output directory."""
     # Load input data
-    read_track_csv(track_file)  # ensure the file exists and is readable
+    df = read_track_csv(track_file)
     bike_params = read_bike_params_csv(bike_file)
 
-    geom = load_track_layout(track_file, ds)
+    closed = (
+        np.hypot(df["x_m"].iloc[0] - df["x_m"].iloc[-1], df["y_m"].iloc[0] - df["y_m"].iloc[-1])
+        <= ds
+    )
+    geom = load_track_layout(track_file, ds, closed=closed)
     x, y, psi, kappa_c = geom.x, geom.y, geom.heading, geom.curvature
     left_edge, right_edge = geom.left_edge, geom.right_edge
     s = np.arange(x.size) * ds
@@ -49,7 +53,6 @@ def run(track_file: str, bike_file: str, ds: float, buffer: float, n_ctrl: int) 
     mu = float(bike_params.get("mu", 1.0))
     a_wheelie_max = float(bike_params.get("a_wheelie_max", 9.81))
     a_brake = float(bike_params.get("a_brake", 9.81))
-    closed = np.hypot(x[0] - x[-1], y[0] - y[-1]) <= ds
     v, ax, ay = solve_speed_profile(
         s, kappa_path, mu, a_wheelie_max, a_brake, closed_loop=closed
     )
