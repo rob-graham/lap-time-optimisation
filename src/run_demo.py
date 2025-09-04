@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from .io_utils import read_track_csv, read_bike_params_csv, write_csv
-from .geometry import load_track
+from .geometry import load_track_layout
 from .path_optim import optimise_lateral_offset
 from .path_param import path_curvature
 from .speed_solver import solve_speed_profile
@@ -28,7 +28,9 @@ def run(track_file: str, bike_file: str, ds: float, buffer: float, n_ctrl: int) 
     read_track_csv(track_file)  # ensure the file exists and is readable
     bike_params = read_bike_params_csv(bike_file)
 
-    x, y, psi, kappa_c, left_edge, right_edge = load_track(track_file, ds)
+    geom = load_track_layout(track_file, ds)
+    x, y, psi, kappa_c = geom.x, geom.y, geom.heading, geom.curvature
+    left_edge, right_edge = geom.left_edge, geom.right_edge
     s = np.arange(x.size) * ds
 
     # Path optimisation

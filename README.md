@@ -31,6 +31,12 @@ python -m src.run_demo --track data/track_layout.csv --bike data/bike_params_r6.
 
 Replace `track_layout.csv` and `bike_params_r6.csv` with the desired files.
 
+The track layout file follows the ``track_layout.csv`` format where each row
+describes the start of either a straight or constant-radius corner section. The
+columns ``x_m``, ``y_m``, ``section_type`` and ``radius_m`` define the geometry
+while ``width_m`` gives the track width used to compute the left and right
+edges.
+
 ## License
 
 MIT License (to be defined).
