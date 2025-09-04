@@ -20,6 +20,7 @@ from .geometry import load_track_layout
 from .path_optim import optimise_lateral_offset
 from .path_param import path_curvature
 from .speed_solver import solve_speed_profile
+from .drivetrain_utils import engine_rpm, select_gear
 
 
 def run(
@@ -71,25 +72,18 @@ def run(
         if k.startswith("gear")
     ]
 
-    def engine_rpm(v_mps: float, gear_ratio: float) -> float:
-        omega_w = v_mps / rw
-        omega_e = omega_w * primary * final_drive * gear_ratio
-        return omega_e * 60.0 / (2 * np.pi)
-
-    def select_gear(v_mps: float) -> int:
-        for i in range(len(gears) - 1, -1, -1):
-            if engine_rpm(v_mps, gears[i]) <= shift_rpm:
-                return i + 1
-        return 1
-
     v, ax, ay, limit, lap_time = solve_speed_profile(
         s, kappa_path, mu, a_wheelie_max, a_brake, closed_loop=closed
     )
 
     speed_kph = v * 3.6
-    gear_idx = np.array([select_gear(vi) for vi in v], dtype=int)
-    gear_ratio = np.array([gears[g - 1] for g in gear_idx])
-    rpm = np.array([engine_rpm(vi, gr) for vi, gr in zip(v, gear_ratio)])
+    gear_ratio = np.array(
+        [select_gear(vi, gears, shift_rpm, primary, final_drive, rw) for vi in v]
+    )
+    gear_idx = np.array([gears.index(gr) + 1 for gr in gear_ratio], dtype=int)
+    rpm = np.array(
+        [engine_rpm(vi, primary, final_drive, gr, rw) for vi, gr in zip(v, gear_ratio)]
+    )
 
     # Write outputs
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
