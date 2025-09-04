@@ -85,10 +85,10 @@ def solve_speed_profile(
         raise ValueError("closed loop requires at least two points")
 
     mu_g = mu * g
-    kappa_mask = np.abs(kappa) > 1e-9
+    kappa_abs = np.abs(kappa)
+    kappa_mask = kappa_abs > 1e-9
     v_lat = np.full_like(kappa, np.inf)
-    np.divide(mu_g, np.abs(kappa), out=v_lat, where=kappa_mask)
-    np.sqrt(v_lat, out=v_lat, where=kappa_mask)
+    v_lat[kappa_mask] = np.sqrt(mu_g / kappa_abs[kappa_mask])
 
     if v_init is None:
         # Initial guess limited only by lateral grip.
@@ -133,7 +133,8 @@ def solve_speed_profile(
         ay_sq = ay**2
         ax_friction = np.sqrt(np.maximum(mu_g**2 - ay_sq, 0.0))
         ax_max = np.minimum(ax_friction, a_wheelie_max)
-        ax_min = -np.minimum(np.sqrt(np.maximum(a_brake**2 - ay_sq, 0.0)), a_brake)
+        ax_fric_brake = np.sqrt(np.maximum(a_brake**2 - ay_sq, 0.0))
+        ax_min = -np.minimum(ax_fric_brake, a_brake)
 
         # Forward pass (acceleration)
         for i in range(n - 1):
@@ -179,7 +180,7 @@ def solve_speed_profile(
             )
             if v_prev_allowed < v[i - 1]:
                 # Determine limiting type for this segment
-                ax_fric_b = np.sqrt(max(a_brake**2 - ay_sq[i - 1], 0.0))
+                ax_fric_b = ax_fric_brake[i - 1]
                 dec_lim = -ax_min[i - 1]
                 if np.isclose(dec_lim, a_brake) and a_brake <= ax_fric_b + 1e-6:
                     limit_type = "stoppie"
