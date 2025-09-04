@@ -40,8 +40,16 @@ def run(
     buffer: float,
     n_ctrl: int,
     closed: bool | None = None,
+    max_iter: int | None = None,
 ) -> tuple[float, Path]:
-    """Execute the optimisation pipeline and return lap time and output directory."""
+    """Execute the optimisation pipeline and return lap time and output directory.
+
+    Parameters
+    ----------
+    max_iter:
+        Maximum iterations for the path optimisation step. Forwarded to
+        :func:`optimise_lateral_offset`.
+    """
     # Load input data
     df = read_track_csv(track_file)
     bike_params = read_bike_params_csv(bike_file)
@@ -59,7 +67,13 @@ def run(
     # Path optimisation
     s_control = np.linspace(s[0], s[-1], n_ctrl)
     offset_spline = optimise_lateral_offset(
-        s, kappa_c, left_edge, right_edge, s_control, buffer=buffer
+        s,
+        kappa_c,
+        left_edge,
+        right_edge,
+        s_control,
+        buffer=buffer,
+        max_iterations=max_iter,
     )
     offset = offset_spline(s)
     kappa_path = path_curvature(s, offset_spline, kappa_c)
@@ -155,6 +169,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--ctrl-points", type=int, default=20, help="Number of lateral offset control points"
     )
+    parser.add_argument(
+        "--max-iter",
+        type=int,
+        default=None,
+        help="Maximum iterations for path optimisation",
+    )
     group = parser.add_mutually_exclusive_group()
     group.add_argument(
         "--open",
@@ -185,6 +205,7 @@ def main(argv: list[str] | None = None) -> None:
         args.buffer,
         args.ctrl_points,
         closed=args.closed,
+        max_iter=args.max_iter,
     )
     if not args.quiet_lap_time:
         print(f"Lap time: {lap_time:.2f} s")
