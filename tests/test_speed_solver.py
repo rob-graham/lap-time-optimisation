@@ -31,6 +31,26 @@ def test_straight_line_profile() -> None:
     assert np.isclose(ax[1], 9.81, rtol=1e-2)
     assert np.isclose(ax[-2], -11.772, rtol=1e-2)
 
+
+def test_straight_line_low_initial_speed_accelerates() -> None:
+    s = np.linspace(0.0, 100.0, 11)
+    kappa = np.zeros_like(s)
+    v_init = np.zeros_like(s)
+    v_init_orig = v_init.copy()
+    v, ax, ay = solve_speed_profile(
+        s,
+        kappa,
+        mu=1.2,
+        a_wheelie_max=9.81,
+        a_brake=11.772,
+        v_init=v_init,
+    )
+    mid = len(s) // 2
+    expected_vmax = np.sqrt(9.81 * 100.0)
+    assert np.isclose(v[mid], expected_vmax, atol=0.5)
+    # Ensure the solver accelerates from the low initial guess
+    assert v[mid] > v_init_orig[mid]
+
 def test_circular_track_speed_limit() -> None:
     R = 50.0
     s = np.linspace(0.0, 1000.0, 5001)

@@ -91,6 +91,13 @@ def solve_speed_profile(
 
     mu_g = mu * g
     for _ in range(max_iterations):
+        if not closed_loop:
+            v[0] = 0.0
+            v[-1] = 0.0
+        # Enforce lateral acceleration limits
+        mask = np.abs(kappa) > 1e-9
+        v[mask] = np.minimum(v[mask], np.sqrt(mu_g / np.abs(kappa[mask])))
+
         v_prev = v.copy()
         ay = v**2 * kappa
 
@@ -103,8 +110,19 @@ def solve_speed_profile(
         # Forward pass (acceleration)
         for i in range(n - 1):
             v_next = np.sqrt(max(v[i] ** 2 + 2.0 * ax_max[i] * ds[i], 0.0))
-            if v_next < v[i + 1]:
-                v[i + 1] = v_next
+            if np.abs(kappa[i + 1]) > 1e-9:
+                v_lat = np.sqrt(mu_g / abs(kappa[i + 1]))
+                v_next = min(v_next, v_lat)
+            current_v = v[i + 1]
+            if v_next < current_v:
+                v[i + 1] = min(v_next, current_v)
+            else:
+                v[i + 1] = max(v[i + 1], v_next)
+        if not closed_loop:
+            v[-1] = 0.0
+        # Enforce lateral limits again after forward pass
+        v[mask] = np.minimum(v[mask], np.sqrt(mu_g / np.abs(kappa[mask])))
+
         # Backward pass (braking)
         for i in range(n - 1, 0, -1):
             v_prev_allowed = np.sqrt(
