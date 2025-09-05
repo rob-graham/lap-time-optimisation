@@ -20,6 +20,8 @@ def test_one_corner_track_open_track(capfd) -> None:
         buffer=0.5,
         n_ctrl=20,
         closed=False,
+        speed_tol=1e-2,
+        path_tol=1e-2,
     )
 
     out = capfd.readouterr().out
@@ -68,6 +70,7 @@ def test_rpm_capped_top_gear(tmp_path) -> None:
         buffer=0.5,
         n_ctrl=20,
         closed=True,
+        path_tol=1e-2,
     )
 
     results = pd.read_csv(out_dir / "results.csv")

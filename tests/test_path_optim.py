@@ -52,6 +52,7 @@ def test_lap_time_cost_reduces_lap_time():
         a_brake=a_brake,
         speed_max_iterations=20,
         speed_tol=1e-2,
+        path_tol=1e-2,
         v_start=0.0,
         v_end=0.0,
     )
@@ -75,9 +76,9 @@ def test_fd_step_forwarded_to_minimize(monkeypatch):
 
     captured: dict | None = None
 
-    def fake_minimize(fun, x0, method=None, constraints=None, options=None):
+    def fake_minimize(fun, x0, method=None, constraints=None, options=None, tol=None):
         nonlocal captured
-        captured = options
+        captured = {"options": options, "tol": tol}
         class Result:
             success = True
             x = x0
@@ -93,6 +94,8 @@ def test_fd_step_forwarded_to_minimize(monkeypatch):
         geom.right_edge,
         s_control,
         fd_step=1e-3,
+        path_tol=1e-2,
     )
-
-    assert captured is not None and captured.get("eps") == 1e-3
+    assert captured is not None
+    assert captured["options"].get("eps") == 1e-3
+    assert captured["tol"] == 1e-2

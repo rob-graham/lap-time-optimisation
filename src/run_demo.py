@@ -43,6 +43,7 @@ def run(
     cost: str = "curvature",
     closed: bool | None = None,
     max_iter: int | None = None,
+    path_tol: float = 1e-3,
     speed_max_iter: int = 50,
     speed_tol: float | None = None,
 ) -> tuple[float, Path]:
@@ -53,9 +54,9 @@ def run(
     cost:
         Objective used for path optimisation. Forwarded to
         :func:`optimise_lateral_offset`.
-    max_iter:
-        Maximum iterations for the path optimisation step. Forwarded to
-        :func:`optimise_lateral_offset`.
+    max_iter, path_tol:
+        Parameters controlling accuracy of the path optimisation step.
+        Forwarded to :func:`optimise_lateral_offset`.
     speed_max_iter, speed_tol:
         Parameters controlling accuracy of the speed profile solver. Smaller
         iteration counts or looser tolerances speed up evaluation but may
@@ -93,6 +94,7 @@ def run(
         s_control,
         buffer=buffer,
         max_iterations=max_iter,
+        path_tol=path_tol,
         cost=cost,
         mu=mu,
         a_wheelie_max=a_wheelie_max,
@@ -230,6 +232,12 @@ def main(argv: list[str] | None = None) -> None:
         help="Maximum iterations for path optimisation",
     )
     parser.add_argument(
+        "--path-tol",
+        type=float,
+        default=1e-3,
+        help="Tolerance for path optimisation",
+    )
+    parser.add_argument(
         "--speed-max-iter",
         type=int,
         default=50,
@@ -279,6 +287,7 @@ def main(argv: list[str] | None = None) -> None:
         cost=args.cost,
         closed=args.closed,
         max_iter=args.max_iter,
+        path_tol=args.path_tol,
         speed_max_iter=args.speed_max_iter,
         speed_tol=args.speed_tol,
     )
