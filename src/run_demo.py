@@ -50,6 +50,7 @@ def run(
     kappa_dot_max: float | None = None,
     use_lean_angle_cap: bool | None = None,
     use_steer_rate_cap: bool | None = None,
+    plot_caps: bool = False,
 ) -> tuple[float, Path]:
     """Execute the optimisation pipeline and return lap time and output directory.
 
@@ -177,6 +178,28 @@ def run(
     ds_array = np.diff(s)
     v_avg = 0.5 * (v[:-1] + v[1:])
     lap_time = float(np.sum(ds_array / np.maximum(v_avg, 1e-9)))
+
+    if plot_caps:
+        g = 9.81
+        v_lean_cap = None
+        v_steer_cap = None
+        if phi_max_deg is not None and use_lean_angle_cap:
+            phi_max_rad = np.deg2rad(phi_max_deg)
+            v_lean_cap = np.sqrt(
+                g * np.tan(phi_max_rad) / np.maximum(np.abs(kappa_path), 1e-6)
+            )
+        if kappa_dot_max is not None and use_steer_rate_cap:
+            dkappa_ds = np.gradient(kappa_path, s, edge_order=2)
+            window = 5 if s.size >= 5 else 3 if s.size >= 3 else 1
+            if window > 1:
+                kernel = np.ones(window) / window
+                dkappa_ds = np.convolve(dkappa_ds, kernel, mode="same")
+            v_steer_cap = kappa_dot_max / np.maximum(np.abs(dkappa_ds), 1e-6)
+        from .plots import plot_speed_caps
+        import matplotlib.pyplot as plt
+
+        plot_speed_caps(s, v, v_lean=v_lean_cap, v_steer=v_steer_cap)
+        plt.show()
 
     # Write outputs
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -321,6 +344,11 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Suppress lap time output",
     )
+    parser.add_argument(
+        "--plot-caps",
+        action="store_true",
+        help="Display speed cap diagnostic plot",
+    )
     args = parser.parse_args(argv)
 
     lap_time, out_dir = run(
@@ -339,6 +367,7 @@ def main(argv: list[str] | None = None) -> None:
         kappa_dot_max=args.kappa_dot_max,
         use_lean_angle_cap=args.use_lean_angle_cap,
         use_steer_rate_cap=args.use_steer_rate_cap,
+        plot_caps=args.plot_caps,
     )
     if not args.quiet_lap_time:
         print(f"Lap time: {lap_time:.2f} s")

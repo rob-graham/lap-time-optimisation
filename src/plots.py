@@ -77,6 +77,31 @@ def plot_speed_profile(
     return ax
 
 
+def plot_speed_caps(
+    s: Iterable[float],
+    v: Iterable[float],
+    v_lean: Iterable[float] | None = None,
+    v_steer: Iterable[float] | None = None,
+    ax: Optional[plt.Axes] = None,
+) -> plt.Axes:
+    """Overlay speed caps with the final speed profile."""
+    if ax is None:
+        _, ax = plt.subplots()
+
+    ax.plot(s, v, label="Speed", color="tab:blue")
+
+    if v_lean is not None:
+        ax.plot(s, v_lean, label="Lean cap", color="tab:orange", linestyle="--")
+
+    if v_steer is not None:
+        ax.plot(s, v_steer, label="Steer cap", color="tab:green", linestyle="--")
+
+    ax.set_xlabel("Distance along track [m]")
+    ax.set_ylabel("Speed [m/s]")
+    ax.legend()
+    return ax
+
+
 def plot_acceleration_profile(
     s: Iterable[float],
     ax_longitudinal: Iterable[float],
