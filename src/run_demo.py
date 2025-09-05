@@ -119,6 +119,9 @@ def run(
     ]
     gear_lookup = {ratio: i + 1 for i, ratio in enumerate(gears)}
 
+    # Maximum speed achievable in top gear at the shift RPM
+    v_top = (shift_rpm * 2 * np.pi * rw) / (60 * primary * final_drive * gears[-1])
+
     v, ax, ay, limit, lap_time, speed_iterations, _ = solve_speed_profile(
         s,
         kappa_path,
@@ -130,7 +133,11 @@ def run(
         tol=speed_tol,
     )
 
+    # Enforce drivetrain top speed limit and recompute dependent quantities
+    v = np.minimum(v, v_top)
     speed_kph = v * 3.6
+    ax = 0.5 * np.gradient(v**2, s, edge_order=2)
+    ay = v**2 * kappa_path
     gear_ratio = np.array(
         [select_gear(vi, gears, shift_rpm, primary, final_drive, rw) for vi in v]
     )
@@ -138,6 +145,12 @@ def run(
     rpm = np.array(
         [engine_rpm(vi, primary, final_drive, gr, rw) for vi, gr in zip(v, gear_ratio)]
     )
+    rpm = np.minimum(rpm, shift_rpm)
+
+    # Update lap time after enforcing top speed
+    ds_array = np.diff(s)
+    v_avg = 0.5 * (v[:-1] + v[1:])
+    lap_time = float(np.sum(ds_array / np.maximum(v_avg, 1e-9)))
 
     # Write outputs
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
