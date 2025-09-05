@@ -25,6 +25,7 @@ def run(
     ds: float,
     *,
     closed: bool | None = None,
+    closed_loop: bool = True,
     kappa_bounds: Tuple[float, float] = (-0.2, 0.2),
     u_kappa_bounds: Tuple[float, float] = (-0.1, 0.1),
     tol: float = 1e-8,
@@ -46,6 +47,9 @@ def run(
     closed:
         Whether the track should be treated as a closed loop. ``None`` attempts
         to infer this from the CSV data.
+    closed_loop:
+        If ``True`` enforce periodic state continuity. Otherwise the initial
+        state is fixed to zero and the terminal state is free.
     kappa_bounds, u_kappa_bounds:
         Bounds on the curvature state and rate control.
     tol, print_level, linear_solver, ipopt_opts:
@@ -97,6 +101,7 @@ def run(
         s_start,
         s_end,
         n_points,
+        closed_loop=closed_loop,
         warm_start_from_method_a=warm_start,
         use_slacks=use_slacks,
         auto_slack_retry=auto_slack_retry,
@@ -130,6 +135,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--warm-start", type=str, default=None, help="Warm start data from Method A")
     parser.add_argument("--use-slacks", action="store_true", help="Include slack variables from the start")
     parser.add_argument("--no-auto-slack", dest="auto_slack_retry", action="store_false", help="Disable automatic slack retry")
+    parser.add_argument(
+        "--closed_loop",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Enforce periodic state continuity",
+    )
 
     args = parser.parse_args(argv)
     ipopt_opts = json.loads(args.ipopt_opts) if args.ipopt_opts else None
@@ -148,6 +159,7 @@ def main(argv: list[str] | None = None) -> None:
         warm_start=args.warm_start,
         use_slacks=args.use_slacks,
         auto_slack_retry=args.auto_slack_retry,
+        closed_loop=args.closed_loop,
     )
     print(f"Outputs written to {out_dir}")
 
