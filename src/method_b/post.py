@@ -59,8 +59,8 @@ def plot_solution(result: SolverResult) -> None:
     """Create basic plots for the optimised trajectory."""
 
     data = extract_arrays(result)
-    plots.plot_speed_profile(data["s"], data["v"])
-    plots.plot_acceleration_profile(data["s"], data["a_x"], data["a_y"])
+    plots.plot_speed_profile(data["s"], data["v"], label="Method B")
+    plots.plot_acceleration_profile(data["s"], data["a_x"], data["a_y"], label="Method B")
 
 
 def save_outputs(result: SolverResult, timestamp: str | None = None) -> Path:
@@ -83,11 +83,11 @@ def save_outputs(result: SolverResult, timestamp: str | None = None) -> Path:
 
     write_csv(data, out_dir / "solution.csv")
 
-    ax = plots.plot_speed_profile(data["s"], data["v"])
+    ax = plots.plot_speed_profile(data["s"], data["v"], label="Method B")
     ax.figure.savefig(out_dir / "speed_profile.png")
     plt.close(ax.figure)
 
-    ax = plots.plot_acceleration_profile(data["s"], data["a_x"], data["a_y"])
+    ax = plots.plot_acceleration_profile(data["s"], data["a_x"], data["a_y"], label="Method B")
     ax.figure.savefig(out_dir / "acceleration_profile.png")
     plt.close(ax.figure)
 
