@@ -151,6 +151,8 @@ def optimise_lateral_offset(
     # Track half-width along s.
     half_width = 0.5 * np.linalg.norm(left_edge - right_edge, axis=1)
     upper_bound = half_width - buffer
+    if np.any(upper_bound <= 0):
+        raise ValueError("buffer exceeds track half-width along the track")
     lower_bound = -upper_bound
 
     # Common arguments for the speed profile solver used in both the baseline

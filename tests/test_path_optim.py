@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 # Add the ``src`` directory to the import path for test execution.
 sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
@@ -34,6 +35,24 @@ def test_optimisation_respects_bounds():
 
     assert np.all(e_vals <= half_width + 1e-6)
     assert np.all(e_vals >= -half_width - 1e-6)
+
+
+def test_buffer_exceeding_half_width_raises_error():
+    geom = load_track_layout("data/track_layout.csv", ds=10.0)
+    s = np.arange(len(geom.x)) * 10.0
+    s_control = np.linspace(s[0], s[-1], 8)
+    half_width = 0.5 * np.linalg.norm(geom.left_edge - geom.right_edge, axis=1)
+    too_large = float(half_width.min() + 0.1)
+
+    with pytest.raises(ValueError):
+        optimise_lateral_offset(
+            s,
+            geom.curvature,
+            geom.left_edge,
+            geom.right_edge,
+            s_control,
+            buffer=too_large,
+        )
 
 
 def test_curvature_cost_performs_multiple_iterations():
