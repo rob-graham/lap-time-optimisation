@@ -46,6 +46,10 @@ def run(
     path_tol: float = 1e-6,
     speed_max_iter: int = 50,
     speed_tol: float | None = None,
+    phi_max_deg: float | None = None,
+    kappa_dot_max: float | None = None,
+    use_lean_angle_cap: bool | None = None,
+    use_steer_rate_cap: bool | None = None,
 ) -> tuple[float, Path]:
     """Execute the optimisation pipeline and return lap time and output directory.
 
@@ -62,6 +66,9 @@ def run(
         iteration counts or looser tolerances speed up evaluation but may
         reduce precision. If ``speed_tol`` is ``None`` the solver's default
         tolerance is used.
+    phi_max_deg, kappa_dot_max, use_lean_angle_cap, use_steer_rate_cap:
+        Parameters governing optional lean angle and steer rate limits. Values
+        provided via the CLI override defaults from the bike parameter file.
     """
     start_time = time.perf_counter()
 
@@ -83,6 +90,14 @@ def run(
     mu = float(bike_params.get("mu", 1.0))
     a_wheelie_max = float(bike_params.get("a_wheelie_max", 9.81))
     a_brake = float(bike_params.get("a_brake", 9.81))
+    if phi_max_deg is None and (val := bike_params.get("phi_max_deg")) is not None:
+        phi_max_deg = float(val)
+    if kappa_dot_max is None and (val := bike_params.get("kappa_dot_max")) is not None:
+        kappa_dot_max = float(val)
+    if use_lean_angle_cap is None:
+        use_lean_angle_cap = bool(bike_params.get("use_lean_angle_cap", True))
+    if use_steer_rate_cap is None:
+        use_steer_rate_cap = bool(bike_params.get("use_steer_rate_cap", True))
 
     # Path optimisation
     s_control = np.linspace(s[0], s[-1], n_ctrl)
@@ -128,6 +143,10 @@ def run(
     speed_kwargs = {
         "closed_loop": closed,
         "max_iterations": speed_max_iter,
+        "phi_max_deg": phi_max_deg,
+        "kappa_dot_max": kappa_dot_max,
+        "use_lean_angle_cap": use_lean_angle_cap,
+        "use_steer_rate_cap": use_steer_rate_cap,
     }
     if speed_tol is not None:
         speed_kwargs["tol"] = speed_tol
@@ -250,6 +269,32 @@ def main(argv: list[str] | None = None) -> None:
         help="Tolerance for speed profile solver (default uses solver value)",
     )
     parser.add_argument(
+        "--phi-max-deg",
+        type=float,
+        default=None,
+        help="Maximum lean angle in degrees",
+    )
+    parser.add_argument(
+        "--kappa-dot-max",
+        type=float,
+        default=None,
+        help="Maximum steer rate in 1/s",
+    )
+    parser.add_argument(
+        "--no-lean-cap",
+        dest="use_lean_angle_cap",
+        action="store_false",
+        default=None,
+        help="Disable lean angle cap",
+    )
+    parser.add_argument(
+        "--no-steer-cap",
+        dest="use_steer_rate_cap",
+        action="store_false",
+        default=None,
+        help="Disable steer rate cap",
+    )
+    parser.add_argument(
         "--cost",
         choices=["curvature", "lap_time"],
         default="curvature",
@@ -290,6 +335,10 @@ def main(argv: list[str] | None = None) -> None:
         path_tol=args.path_tol,
         speed_max_iter=args.speed_max_iter,
         speed_tol=args.speed_tol,
+        phi_max_deg=args.phi_max_deg,
+        kappa_dot_max=args.kappa_dot_max,
+        use_lean_angle_cap=args.use_lean_angle_cap,
+        use_steer_rate_cap=args.use_steer_rate_cap,
     )
     if not args.quiet_lap_time:
         print(f"Lap time: {lap_time:.2f} s")
