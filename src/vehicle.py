@@ -36,7 +36,7 @@ class Vehicle:
     # ------------------------------------------------------------------
     # Parameter loading
     def _load_parameters(self) -> None:
-        params: Dict[str, float] = {}
+        params: Dict[str, float | bool | str] = {}
         torque_data: list[Tuple[float, float]] = []
         in_torque_section = False
 
@@ -58,9 +58,17 @@ class Vehicle:
                     torque_data.append((rpm, torque))
                 else:
                     try:
-                        params[key] = float(row[1])
-                    except (IndexError, ValueError):
+                        raw = row[1].strip()
+                    except IndexError:
                         continue
+                    try:
+                        params[key] = float(raw)
+                    except ValueError:
+                        low = raw.lower()
+                        if low in {"true", "false"}:
+                            params[key] = low == "true"
+                        else:
+                            params[key] = raw
 
         if not torque_data:
             # Fall back to a constant torque curve if none provided.
@@ -97,6 +105,12 @@ class Vehicle:
             key=lambda x: int(x[4:]),
         )
         self.gear_ratios = np.array([params[k] for k in gear_keys], dtype=float)
+
+        # Optional caps and flags
+        self.phi_max_deg = params.get("phi_max_deg")  # None disables cap
+        self.kappa_dot_max = params.get("kappa_dot_max")
+        self.use_lean_angle_cap = params.get("use_lean_angle_cap", True)
+        self.use_steer_rate_cap = params.get("use_steer_rate_cap", True)
 
     # ------------------------------------------------------------------
     # Tractive force computation
