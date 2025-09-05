@@ -54,7 +54,6 @@ def test_lap_time_cost_reduces_lap_time():
         speed_tol=1e-2,
         v_start=0.0,
         v_end=0.0,
-        lap_time_weight=1.0,
     )
 
     kappa_opt = path_curvature(s, offset_spline, geom.curvature)
