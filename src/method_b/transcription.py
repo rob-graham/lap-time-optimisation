@@ -10,12 +10,49 @@ import casadi as ca
 from .ocp import OCP
 
 
-def create_grid(s_start: float, s_end: float, n_points: int) -> np.ndarray:
-    """Return an evenly spaced grid between ``s_start`` and ``s_end``."""
+def create_grid(
+    s_start: float,
+    s_end: float,
+    *,
+    n_points: int | None = None,
+    ds: float | None = None,
+) -> np.ndarray:
+    """Return a monotonically increasing grid between ``s_start`` and ``s_end``.
 
+    The grid can either be specified by the number of points ``n_points`` or a
+    constant spacing ``ds``.  Exactly one of the two arguments must be given.
+    The end point is always included which means that the actual spacing may be
+    slightly smaller than ``ds`` when ``(s_end - s_start)`` is not an integer
+    multiple of it.
+    """
+
+    if (n_points is None) == (ds is None):
+        raise ValueError("Specify exactly one of n_points or ds")
+
+    if ds is not None:
+        if ds <= 0:
+            raise ValueError("ds must be positive")
+        n_points = int(np.floor((s_end - s_start) / ds)) + 1
+        grid = s_start + ds * np.arange(n_points)
+        if grid[-1] < s_end:
+            grid = np.append(grid, s_end)
+        else:
+            grid[-1] = s_end
+        return grid
+
+    assert n_points is not None  # for mypy
     if n_points < 2:
         raise ValueError("n_points must be at least 2")
     return np.linspace(s_start, s_end, n_points)
+
+
+def state_control_vectors(ocp: OCP, grid: np.ndarray) -> Tuple[ca.SX, ca.SX]:
+    """Create symbolic state and control matrices for the given grid."""
+
+    n_nodes = grid.size
+    x = ca.SX.sym("x", ocp.n_x, n_nodes)
+    u = ca.SX.sym("u", ocp.n_u, n_nodes)
+    return x, u
 
 
 def trapezoidal_collocation(ocp: OCP, grid: np.ndarray) -> Tuple[ca.SX, ca.SX, ca.SX]:
@@ -36,15 +73,11 @@ def trapezoidal_collocation(ocp: OCP, grid: np.ndarray) -> Tuple[ca.SX, ca.SX, c
         the dynamics via the trapezoidal rule.
     """
 
-    n_x, n_u = ocp.n_x, ocp.n_u
-    N = grid.size - 1
-
-    x = ca.SX.sym("x", n_x, N + 1)
-    u = ca.SX.sym("u", n_u, N + 1)
+    x, u = state_control_vectors(ocp, grid)
+    ds = np.diff(grid)
 
     defects = []
-    for k in range(N):
-        h = grid[k + 1] - grid[k]
+    for k, h in enumerate(ds):
         xk = x[:, k]
         xk1 = x[:, k + 1]
         uk = u[:, k]
@@ -56,3 +89,25 @@ def trapezoidal_collocation(ocp: OCP, grid: np.ndarray) -> Tuple[ca.SX, ca.SX, c
 
     g_defect = ca.vertcat(*defects) if defects else ca.SX.zeros(0)
     return x, u, g_defect
+
+
+def decision_variables(x: ca.SX, u: ca.SX) -> ca.SX:
+    """Stack the state and control matrices into a single decision vector."""
+
+    return ca.vertcat(ca.reshape(x, -1, 1), ca.reshape(u, -1, 1))
+
+
+def assemble_constraints(*cons: ca.SX) -> ca.SX:
+    """Vertically stack constraint vectors while handling empty inputs."""
+
+    cons = [c for c in cons if c.size1() > 0]
+    return ca.vertcat(*cons) if cons else ca.SX.zeros(0)
+
+
+__all__ = [
+    "create_grid",
+    "state_control_vectors",
+    "trapezoidal_collocation",
+    "decision_variables",
+    "assemble_constraints",
+]

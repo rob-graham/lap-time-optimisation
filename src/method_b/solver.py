@@ -9,7 +9,12 @@ import numpy as np
 import casadi as ca
 
 from .ocp import OCP
-from .transcription import create_grid, trapezoidal_collocation
+from .transcription import (
+    create_grid,
+    trapezoidal_collocation,
+    decision_variables,
+    assemble_constraints,
+)
 
 
 @dataclass
@@ -59,7 +64,7 @@ def _build_nlp(
         )
 
     # Decision variables
-    z = ca.vertcat(ca.reshape(x, -1, 1), ca.reshape(u, -1, 1))
+    z = decision_variables(x, u)
 
     # Bounds
     x_min, x_max, u_min, u_max, g_min, g_max = ocp.bounds()
@@ -71,14 +76,14 @@ def _build_nlp(
     lbg_path = np.tile(g_min, n_nodes)
     ubg_path = np.tile(g_max, n_nodes)
 
-    g = ca.vertcat(g_defect, g_path)
+    g = assemble_constraints(g_defect, g_path)
     lbg = np.concatenate([lbg_defect, lbg_path])
     ubg = np.concatenate([ubg_defect, ubg_path])
 
     if slack and g_path.size1() > 0:
         s = ca.SX.sym("s", g_path.size1())
         z = ca.vertcat(z, s)
-        g = ca.vertcat(g_defect, g_path - s)
+        g = assemble_constraints(g_defect, g_path - s)
         lbx = np.concatenate([lbx, np.zeros(s.size1())])
         ubx = np.concatenate([ubx, np.full(s.size1(), np.inf)])
         lbg = np.concatenate([lbg_defect, lbg_path])
@@ -126,7 +131,7 @@ def solve(
         Additional IPOPT options overriding the defaults.
     """
 
-    grid = create_grid(s_start, s_end, n_points)
+    grid = create_grid(s_start, s_end, n_points=n_points)
     solver, lbx, ubx, lbg, ubg, n_nodes, n_x, n_u = _build_nlp(
         ocp, grid, slack=False, ipopt_opts=ipopt_opts
     )
