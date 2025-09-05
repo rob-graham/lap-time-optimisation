@@ -167,3 +167,53 @@ def test_steer_rate_cap_limits_speed() -> None:
     expected = 0.5 / 1.0
     assert np.isclose(v[mid], expected, atol=0.1)
     assert limit[mid] == "steer"
+
+
+def test_lean_angle_small_phi_matches_theory() -> None:
+    """Lean angle cap enforces theoretical speed for small angles."""
+    s = np.linspace(0.0, 50.0, 101)
+    kappa = np.full_like(s, 0.05)
+    phi_max_deg = 10.0
+    v, ax, ay, limit, _, _, _ = solve_speed_profile(
+        s,
+        kappa,
+        mu=100.0,
+        a_wheelie_max=50.0,
+        a_brake=50.0,
+        v_start=0.0,
+        v_end=0.0,
+        phi_max_deg=phi_max_deg,
+        use_steer_rate_cap=False,
+    )
+    expected = np.sqrt(9.81 * np.tan(np.deg2rad(phi_max_deg)) / np.abs(kappa[0]))
+    mask = limit == "lean"
+    assert mask.any()
+    assert np.allclose(v[mask], expected, atol=1e-6)
+    assert np.all(limit[mask] == "lean")
+
+
+def test_steer_rate_ramp_matches_theory() -> None:
+    """Steer rate cap limits speed based on curvature rate."""
+    s = np.linspace(0.0, 1.0, 101)
+    kappa = np.linspace(0.0, 10.0, 101)
+    kappa_dot_max = 5.0
+    v, ax, ay, limit, _, _, _ = solve_speed_profile(
+        s,
+        kappa,
+        mu=100.0,
+        a_wheelie_max=50.0,
+        a_brake=50.0,
+        v_start=0.0,
+        v_end=0.0,
+        kappa_dot_max=kappa_dot_max,
+        use_lean_angle_cap=False,
+    )
+    dkappa_ds = np.gradient(kappa, s, edge_order=2)
+    window = 5 if kappa.size >= 5 else 3 if kappa.size >= 3 else 1
+    if window > 1:
+        dkappa_ds = np.convolve(dkappa_ds, np.ones(window) / window, mode="same")
+    expected = kappa_dot_max / np.maximum(np.abs(dkappa_ds), 1e-6)
+    mask = limit == "steer"
+    assert mask.any()
+    assert np.allclose(v[mask], expected[mask], atol=1e-6)
+    assert np.all(limit[mask] == "steer")
