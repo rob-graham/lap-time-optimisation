@@ -26,6 +26,8 @@ gear1,2.0
 final_drive,3.0
 eta_driveline,0.9
 T_peak,50
+phi_max_deg,45
+kappa_dot_max,10.5
 rpm,Nm
 0,0
 5000,50
@@ -37,10 +39,41 @@ rpm,Nm
 
 
 def test_optional_parameter_defaults(tmp_path: Path) -> None:
-    csv_path = _create_csv(tmp_path)
-    vehicle = Vehicle(csv_path)
+    content = """
+rho,1.225
+g,9.81
+m,200
+CdA,0.3
+Crr,0.01
+rw,0.3
+mu,1.5
+a_wheelie_max,5.0
+a_brake,9.0
+shift_rpm,10000
+primary,2.0
+gear1,2.0
+final_drive,3.0
+eta_driveline,0.9
+T_peak,50
+rpm,Nm
+0,0
+5000,50
+10000,0
+"""
+    file = tmp_path / "bike_params.csv"
+    file.write_text(content.strip())
+    vehicle = Vehicle(file)
     assert vehicle.phi_max_deg is None
     assert vehicle.kappa_dot_max is None
+    assert vehicle.use_lean_angle_cap is False
+    assert vehicle.use_steer_rate_cap is False
+
+
+def test_optional_parameter_inference(tmp_path: Path) -> None:
+    csv_path = _create_csv(tmp_path)
+    vehicle = Vehicle(csv_path)
+    assert vehicle.phi_max_deg == 45.0
+    assert vehicle.kappa_dot_max == 10.5
     assert vehicle.use_lean_angle_cap is True
     assert vehicle.use_steer_rate_cap is True
 

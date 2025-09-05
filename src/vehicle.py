@@ -109,8 +109,12 @@ class Vehicle:
         # Optional caps and flags
         self.phi_max_deg = params.get("phi_max_deg")  # None disables cap
         self.kappa_dot_max = params.get("kappa_dot_max")
-        self.use_lean_angle_cap = params.get("use_lean_angle_cap", True)
-        self.use_steer_rate_cap = params.get("use_steer_rate_cap", True)
+        self.use_lean_angle_cap = bool(
+            params.get("use_lean_angle_cap", self.phi_max_deg is not None)
+        )
+        self.use_steer_rate_cap = bool(
+            params.get("use_steer_rate_cap", self.kappa_dot_max is not None)
+        )
 
     # ------------------------------------------------------------------
     # Tractive force computation
