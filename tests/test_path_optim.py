@@ -30,6 +30,32 @@ def test_optimisation_respects_bounds():
     assert np.all(e_vals >= -half_width - 1e-6)
 
 
+def test_curvature_cost_performs_multiple_iterations():
+    """Ensure curvature cost optimisation iterates more than once.
+
+    With ``path_tol=1e-6`` on ``track_layout.csv`` the SLSQP solver typically
+    performs around 20 iterations before converging.  The exact count may vary
+    slightly with ``scipy`` versions, but anything less than 2 indicates the
+    optimisation terminated prematurely and warrants investigation."""
+
+    geom = load_track_layout("data/track_layout.csv", ds=10.0)
+    s = np.arange(len(geom.x)) * 10.0
+    s_control = np.linspace(s[0], s[-1], 8)
+
+    _, iterations = optimise_lateral_offset(
+        s,
+        geom.curvature,
+        geom.left_edge,
+        geom.right_edge,
+        s_control,
+        buffer=0.5,
+        cost="curvature",
+        path_tol=1e-6,
+    )
+
+    assert iterations > 1, f"Expected more than one iteration, got {iterations}"
+
+
 def test_lap_time_cost_reduces_lap_time():
     geom = load_track_layout("data/oneCornerTrack.csv", ds=10.0)
     s = np.arange(len(geom.x)) * 10.0
