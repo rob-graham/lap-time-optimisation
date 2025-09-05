@@ -27,7 +27,7 @@ def solve_speed_profile(
     closed_loop: bool = False,
     g: float = 9.81,
     max_iterations: int = 50,
-    tol: float = 1e-6,  # was 1e-3
+    tol: float = 1e-3,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, int, float]:
     r"""Solve for the feasible speed profile along a path.
 
