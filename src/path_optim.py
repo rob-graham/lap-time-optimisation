@@ -44,7 +44,7 @@ def optimise_lateral_offset(
     closed_loop: bool = False,
     g: float = 9.81,
     speed_max_iterations: int = 50,
-    speed_tol: float = 1e-3,
+    speed_tol: float | None = None,
     lap_time_weight: float = 100.0,  # default 1.0
 ) -> tuple[LateralOffsetSpline, int]:
     """Optimise lateral offset control points for a racing line.
@@ -97,7 +97,8 @@ def optimise_lateral_offset(
         yields faster but potentially less accurate lap time estimates.
     speed_tol:
         Convergence tolerance for the speed profile solver. A looser tolerance
-        speeds up evaluation at the expense of precision.
+        speeds up evaluation at the expense of precision. If ``None`` the
+        solver's default tolerance is used.
 
     Returns
     -------
@@ -154,18 +155,22 @@ def optimise_lateral_offset(
             # np.trapz is used for backward compatibility.
             return float(np.trapz(integrand, s))
         else:  # cost == "lap_time"
+            solve_kwargs = {
+                "v_start": v_start,
+                "v_end": v_end,
+                "closed_loop": closed_loop,
+                "g": g,
+                "max_iterations": speed_max_iterations,
+            }
+            if speed_tol is not None:
+                solve_kwargs["tol"] = speed_tol
             _, _, _, _, lap_time, _, _ = speed_solver.solve_speed_profile(
                 s,
                 kappa,
                 mu,
                 a_wheelie_max,
                 a_brake,
-                v_start=v_start,
-                v_end=v_end,
-                closed_loop=closed_loop,
-                g=g,
-                max_iterations=speed_max_iterations,
-                tol=speed_tol,
+                **solve_kwargs,
             )
             return float(lap_time_weight * lap_time)
 
