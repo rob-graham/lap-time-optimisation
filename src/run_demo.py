@@ -140,6 +140,8 @@ def run(
         for k, v in sorted(bike_params.items())
         if k.startswith("gear")
     ]
+    if not gears:
+        raise ValueError("No gear ratios provided in bike parameters")
     gear_lookup = {ratio: i + 1 for i, ratio in enumerate(gears)}
 
     # Maximum speed achievable in top gear at the shift RPM
