@@ -97,6 +97,33 @@ def decision_variables(x: ca.SX, u: ca.SX) -> ca.SX:
     return ca.vertcat(ca.reshape(x, -1, 1), ca.reshape(u, -1, 1))
 
 
+def extract_unscaled_solution(ocp: OCP, z: np.ndarray, n_nodes: int) -> Tuple[np.ndarray, np.ndarray]:
+    """Reshape and unscale IPOPT solution vector.
+
+    Parameters
+    ----------
+    ocp:
+        Problem definition providing scaling information.
+    z:
+        Optimiser decision vector consisting of stacked state and control
+        variables in *scaled* form.
+    n_nodes:
+        Number of grid nodes used in the transcription.
+
+    Returns
+    -------
+    (x, u):
+        Tuple of unscaled state and control trajectories.
+    """
+
+    n_x, n_u = ocp.n_x, ocp.n_u
+    n_dec_x = n_x * n_nodes
+    x_scaled = z[:n_dec_x].reshape(n_x, n_nodes)
+    u = z[n_dec_x : n_dec_x + n_u * n_nodes].reshape(n_u, n_nodes)
+    x = ocp.unscale_x_array(x_scaled)
+    return x, u
+
+
 def assemble_constraints(*cons: ca.SX) -> ca.SX:
     """Vertically stack constraint vectors while handling empty inputs."""
 
@@ -110,4 +137,5 @@ __all__ = [
     "trapezoidal_collocation",
     "decision_variables",
     "assemble_constraints",
+    "extract_unscaled_solution",
 ]
