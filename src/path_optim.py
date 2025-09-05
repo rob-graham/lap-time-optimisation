@@ -32,9 +32,9 @@ def optimise_lateral_offset(
     s_control: Sequence[float],
     e_init: Sequence[float] | None = None,
     buffer: float = 0.0,
-    method: str = "SLSQP",
+    method: str = "SLSQP", # SLSQP (default) or trust-constr
     max_iterations: int | None = None,
-    fd_step: float | None = None,
+    fd_step: float | None = None, # default | None = None,
     cost: str = "curvature",
     mu: float = 1.0,
     a_wheelie_max: float = 9.81,
@@ -45,7 +45,7 @@ def optimise_lateral_offset(
     g: float = 9.81,
     speed_max_iterations: int = 50,
     speed_tol: float = 1e-3,
-    lap_time_weight: float = 1.0,
+    lap_time_weight: float = 100.0,  # default 1.0
 ) -> tuple[LateralOffsetSpline, int]:
     """Optimise lateral offset control points for a racing line.
 
