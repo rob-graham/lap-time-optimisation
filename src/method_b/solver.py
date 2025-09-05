@@ -43,6 +43,8 @@ class SolverResult:
 def _build_nlp(
     ocp: OCP,
     grid: np.ndarray,
+    *,
+    closed_loop: bool,
     slack: bool = False,
 ) -> tuple[Dict[str, ca.SX], np.ndarray, np.ndarray, np.ndarray, np.ndarray, int, int, int]:
     """Assemble the CasADi NLP expression and accompanying bounds."""
@@ -76,19 +78,37 @@ def _build_nlp(
     lbg_path = np.tile(g_min, n_nodes)
     ubg_path = np.tile(g_max, n_nodes)
 
-    g = assemble_constraints(g_defect, g_path)
-    lbg = np.concatenate([lbg_defect, lbg_path])
-    ubg = np.concatenate([ubg_defect, ubg_path])
+    g_list = [g_defect]
+    lbg_list = [lbg_defect]
+    ubg_list = [ubg_defect]
 
     if slack and g_path.size1() > 0:
         s = ca.SX.sym("s", g_path.size1())
         z = ca.vertcat(z, s)
-        g = assemble_constraints(g_defect, g_path - s)
+        g_list.append(g_path - s)
         lbx = np.concatenate([lbx, np.zeros(s.size1())])
         ubx = np.concatenate([ubx, np.full(s.size1(), np.inf)])
-        lbg = np.concatenate([lbg_defect, lbg_path])
-        ubg = np.concatenate([ubg_defect, ubg_path])
+        lbg_list.append(lbg_path)
+        ubg_list.append(ubg_path)
         J += 1e6 * ca.sumsqr(s)
+    else:
+        g_list.append(g_path)
+        lbg_list.append(lbg_path)
+        ubg_list.append(ubg_path)
+
+    if closed_loop:
+        g_bc = x[:, 0] - x[:, -1]
+        g_list.append(g_bc)
+        zeros = np.zeros(n_x)
+        lbg_list.append(zeros)
+        ubg_list.append(zeros)
+    else:
+        lbx[:n_x] = 0.0
+        ubx[:n_x] = 0.0
+
+    g = assemble_constraints(*g_list)
+    lbg = np.concatenate(lbg_list)
+    ubg = np.concatenate(ubg_list)
 
     nlp = {"x": z, "f": J, "g": g}
     return nlp, lbx, ubx, lbg, ubg, n_nodes, n_x, n_u
@@ -141,6 +161,7 @@ def solve(
     s_end: float,
     n_points: int,
     *,
+    closed_loop: bool = True,
     warm_start_from_method_a: Union[str, Dict[str, Any], None] = None,
     use_slacks: bool = False,
     auto_slack_retry: bool = True,
@@ -172,7 +193,9 @@ def solve(
     """
 
     grid = create_grid(s_start, s_end, n_points=n_points)
-    nlp, lbx, ubx, lbg, ubg, n_nodes, n_x, n_u = _build_nlp(ocp, grid, slack=use_slacks)
+    nlp, lbx, ubx, lbg, ubg, n_nodes, n_x, n_u = _build_nlp(
+        ocp, grid, closed_loop=closed_loop, slack=use_slacks
+    )
 
     opts: Dict[str, Any] = {
         "print_time": False,
@@ -196,7 +219,9 @@ def solve(
     stats = solver.stats()
 
     if (use_slacks or auto_slack_retry) and stats.get("return_status") not in {"Solve_Succeeded", "Solved_Succeeded"}:
-        nlp, lbx, ubx, lbg, ubg, n_nodes, n_x, n_u = _build_nlp(ocp, grid, slack=True)
+        nlp, lbx, ubx, lbg, ubg, n_nodes, n_x, n_u = _build_nlp(
+            ocp, grid, closed_loop=closed_loop, slack=True
+        )
         solver = ca.nlpsol("solver", "ipopt", nlp, opts)
         sol = solver(lbx=lbx, ubx=ubx, lbg=lbg, ubg=ubg, x0=x0, lam_g0=lam_g0)
         stats = solver.stats()
