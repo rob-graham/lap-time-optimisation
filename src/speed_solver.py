@@ -26,6 +26,10 @@ def solve_speed_profile(
     v_end: float | None = None,
     closed_loop: bool = False,
     g: float = 9.81,
+    phi_max_deg: float | None = None,
+    kappa_dot_max: float | None = None,
+    use_lean_angle_cap: bool = True,
+    use_steer_rate_cap: bool = True,
     max_iterations: int = 50,
     tol: float = 1e-3,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, int, float]:
@@ -56,6 +60,18 @@ def solve_speed_profile(
         until the initial and final speeds converge to the same value.
     g:
         Gravitational acceleration in ``m/s^2``.
+    phi_max_deg:
+        Optional maximum lean angle in degrees.  When provided and
+        ``use_lean_angle_cap`` is ``True`` the speed is capped such that the
+        required lean angle does not exceed this limit.
+    kappa_dot_max:
+        Optional maximum steer rate in ``1/s``.  When provided and
+        ``use_steer_rate_cap`` is ``True`` the speed is capped based on the rate
+        of change of curvature along the path.
+    use_lean_angle_cap:
+        Enable enforcing the lean angle cap.
+    use_steer_rate_cap:
+        Enable enforcing the steer rate cap.
     max_iterations:
         Maximum number of forward/backward passes.
     tol:
@@ -67,8 +83,8 @@ def solve_speed_profile(
         Arrays of speed ``v``, longitudinal acceleration ``ax`` and lateral
         acceleration ``ay`` sampled at ``s`` along with a string array
         ``limit`` describing the active constraint at each sample
-        (``"corner"``, ``"accel"``, ``"braking"``, ``"wheelie"`` or
-        ``"stoppie"``), the total ``lap_time`` obtained by integrating
+        (``"corner"``, ``"accel"``, ``"braking"``, ``"wheelie"``, ``"stoppie"``,
+        ``"lean"`` or ``"steer"``), the total ``lap_time`` obtained by integrating
         ``ds / v``, the number of iterations performed and the solver
         runtime ``elapsed_s`` in seconds.
     """
@@ -91,6 +107,35 @@ def solve_speed_profile(
     kappa_mask = kappa_abs > 1e-9
     v_lat = np.full_like(kappa, np.inf)
     v_lat[kappa_mask] = np.sqrt(mu_g / kappa_abs[kappa_mask])
+
+    if phi_max_deg is not None and use_lean_angle_cap:
+        phi_max_rad = np.deg2rad(phi_max_deg)
+        v_lean = np.sqrt(g * np.tan(phi_max_rad) / np.maximum(kappa_abs, 1e-6))
+    else:
+        v_lean = np.full_like(kappa, np.inf)
+
+    if kappa_dot_max is not None and use_steer_rate_cap:
+        dkappa_ds = np.gradient(kappa, s, edge_order=2)
+        window = 5 if n >= 5 else 3 if n >= 3 else 1
+        if window > 1:
+            kernel = np.ones(window) / window
+            dkappa_ds = np.convolve(dkappa_ds, kernel, mode="same")
+        v_steer = kappa_dot_max / np.maximum(np.abs(dkappa_ds), 1e-6)
+    else:
+        v_steer = np.full_like(kappa, np.inf)
+
+    caps = [(v_lat, "corner")]
+    if use_lean_angle_cap and phi_max_deg is not None:
+        caps.append((v_lean, "lean"))
+    if use_steer_rate_cap and kappa_dot_max is not None:
+        caps.append((v_steer, "steer"))
+
+    def apply_caps(v_array: np.ndarray, limit_arr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        for cap, name in caps:
+            v_before = v_array.copy()
+            v_array = np.minimum(v_array, cap)
+            limit_arr = np.where(v_array < v_before, name, limit_arr)
+        return v_array, limit_arr
 
     if v_init is None:
         # Initial guess limited only by lateral grip.
@@ -124,12 +169,8 @@ def solve_speed_profile(
             if v_end is not None:
                 v[-1] = float(v_end)
 
-        # Enforce lateral acceleration limits before the passes
-        v_before = v[kappa_mask].copy()
-        v[kappa_mask] = np.minimum(v[kappa_mask], v_lat[kappa_mask])
-        limit_forward[kappa_mask] = np.where(
-            v[kappa_mask] < v_before, "corner", limit_forward[kappa_mask]
-        )
+        # Enforce all active caps before the passes
+        v, limit_forward = apply_caps(v, limit_forward)
 
         v_prev = v.copy()
         ay = v**2 * kappa
@@ -144,26 +185,22 @@ def solve_speed_profile(
         # Forward pass (acceleration)
         for i in range(n - 1):
             v_next = np.sqrt(max(v[i] ** 2 + 2.0 * ax_max[i] * ds[i], 0.0))
-            limit_type: str
-            if kappa_mask[i + 1]:
-                v_lat_next = v_lat[i + 1]
-                if v_next > v_lat_next:
-                    v_next = v_lat_next
-                    limit_type = "corner"
-                else:
-                    if np.isclose(ax_max[i], a_wheelie_max) and a_wheelie_max <= ax_friction[i] + 1e-6:
-                        limit_type = "wheelie"
-                    elif np.isclose(ax_max[i], ax_friction[i]):
-                        limit_type = "corner"
-                    else:
-                        limit_type = "accel"
+            if np.isclose(ax_max[i], a_wheelie_max) and a_wheelie_max <= ax_friction[i] + 1e-6:
+                limit_type = "wheelie"
+            elif np.isclose(ax_max[i], ax_friction[i]):
+                limit_type = "corner"
             else:
-                if np.isclose(ax_max[i], a_wheelie_max) and a_wheelie_max <= ax_friction[i] + 1e-6:
-                    limit_type = "wheelie"
-                elif np.isclose(ax_max[i], ax_friction[i]):
-                    limit_type = "corner"
-                else:
-                    limit_type = "accel"
+                limit_type = "accel"
+
+            local_caps = [(v_lat[i + 1], "corner")]
+            if use_lean_angle_cap and phi_max_deg is not None:
+                local_caps.append((v_lean[i + 1], "lean"))
+            if use_steer_rate_cap and kappa_dot_max is not None:
+                local_caps.append((v_steer[i + 1], "steer"))
+            for cap, name in local_caps:
+                if v_next > cap:
+                    v_next = cap
+                    limit_type = name
 
             v[i + 1] = v_next
             limit_forward[i + 1] = limit_type
@@ -171,30 +208,39 @@ def solve_speed_profile(
         if not closed_loop and v_end is not None:
             v[-1] = float(v_end)
 
-        # Enforce lateral limits again after forward pass
-        v_before = v[kappa_mask].copy()
-        v[kappa_mask] = np.minimum(v[kappa_mask], v_lat[kappa_mask])
-        limit_forward[kappa_mask] = np.where(
-            v[kappa_mask] < v_before, "corner", limit_forward[kappa_mask]
-        )
+        # Enforce caps again after forward pass
+        v, limit_forward = apply_caps(v, limit_forward)
 
         # Backward pass (braking)
         for i in range(n - 1, 0, -1):
             v_prev_allowed = np.sqrt(
                 max(v[i] ** 2 - 2.0 * ax_min[i - 1] * ds[i - 1], 0.0)
             )
+            limit_type: str | None = None
+            local_caps = [(v_lat[i - 1], "corner")]
+            if use_lean_angle_cap and phi_max_deg is not None:
+                local_caps.append((v_lean[i - 1], "lean"))
+            if use_steer_rate_cap and kappa_dot_max is not None:
+                local_caps.append((v_steer[i - 1], "steer"))
+            for cap, name in local_caps:
+                if v_prev_allowed > cap:
+                    v_prev_allowed = cap
+                    limit_type = name
             if v_prev_allowed < v[i - 1]:
-                # Determine limiting type for this segment
-                ax_fric_b = ax_fric_brake[i - 1]
-                dec_lim = -ax_min[i - 1]
-                if np.isclose(dec_lim, a_brake) and a_brake <= ax_fric_b + 1e-6:
-                    limit_type = "stoppie"
-                elif np.isclose(dec_lim, ax_fric_b):
-                    limit_type = "corner"
-                else:
-                    limit_type = "braking"
+                if limit_type is None:
+                    ax_fric_b = ax_fric_brake[i - 1]
+                    dec_lim = -ax_min[i - 1]
+                    if np.isclose(dec_lim, a_brake) and a_brake <= ax_fric_b + 1e-6:
+                        limit_type = "stoppie"
+                    elif np.isclose(dec_lim, ax_fric_b):
+                        limit_type = "corner"
+                    else:
+                        limit_type = "braking"
                 v[i - 1] = v_prev_allowed
                 limit_backward[i - 1] = limit_type
+
+        # Enforce caps after backward pass
+        v, limit_backward = apply_caps(v, limit_backward)
 
         if closed_loop:
             v_edge = 0.5 * (v[0] + v[-1])
@@ -219,11 +265,15 @@ def solve_speed_profile(
     b_mask = ~f_mask
     limit[b_mask] = limit_backward[b_mask]
 
-    # Ensure cornering limits are flagged where speed hits lateral bound
-    corner_mask = kappa_mask & np.isclose(
-        v, v_lat, rtol=1e-3, atol=1e-2
-    )
-    limit[corner_mask] = "corner"
+    # Ensure limits are flagged where speed hits cap arrays
+    corner_mask = np.isclose(v, v_lat, rtol=1e-3, atol=1e-2)
+    limit[corner_mask & kappa_mask] = "corner"
+    if use_lean_angle_cap and phi_max_deg is not None:
+        lean_mask = np.isclose(v, v_lean, rtol=1e-3, atol=1e-2)
+        limit[lean_mask] = "lean"
+    if use_steer_rate_cap and kappa_dot_max is not None:
+        steer_mask = np.isclose(v, v_steer, rtol=1e-3, atol=1e-2)
+        limit[steer_mask] = "steer"
 
     # Fill any remaining unspecified entries based on acceleration sign
     unset = limit == ""
