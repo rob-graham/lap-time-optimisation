@@ -39,6 +39,11 @@ faster execution using `--max-iter` and `--path-tol` for the former and
 looser convergence tolerances reduce run time but may slightly increase lap
 time estimates.
 
+By default the path optimiser uses a finite-difference step size of `1e-2` when
+approximating gradients. This value can be adjusted through the `fd_step`
+argument of `optimise_lateral_offset` if finer control over the optimisation is
+needed.
+
 The track layout file follows the ``track_layout.csv`` format where each row
 describes the start of either a straight or constant-radius corner section. The
 columns ``x_m``, ``y_m``, ``section_type`` and ``radius_m`` define the geometry
