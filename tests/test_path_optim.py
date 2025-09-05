@@ -55,6 +55,7 @@ def test_lap_time_cost_reduces_lap_time():
         path_tol=1e-2,
         v_start=0.0,
         v_end=0.0,
+        fd_step=1e-3,
     )
 
     kappa_opt = path_curvature(s, offset_spline, geom.curvature)
@@ -74,11 +75,10 @@ def test_fd_step_forwarded_to_minimize(monkeypatch):
     s = np.arange(len(geom.x)) * 10.0
     s_control = np.linspace(s[0], s[-1], 8)
 
-    captured: dict | None = None
+    captured: list[dict] = []
 
     def fake_minimize(fun, x0, method=None, constraints=None, options=None, tol=None):
-        nonlocal captured
-        captured = {"options": options, "tol": tol}
+        captured.append({"options": options, "tol": tol})
         class Result:
             success = True
             x = x0
@@ -87,6 +87,21 @@ def test_fd_step_forwarded_to_minimize(monkeypatch):
 
     monkeypatch.setattr(path_optim, "minimize", fake_minimize)
 
+    # Explicitly pass None to trigger the default value forwarding
+    optimise_lateral_offset(
+        s,
+        geom.curvature,
+        geom.left_edge,
+        geom.right_edge,
+        s_control,
+        fd_step=None,
+        path_tol=1e-2,
+    )
+    # Default should be forwarded as 1e-2
+    assert captured and captured[0]["options"].get("eps") == 1e-2
+    assert captured[0]["tol"] == 1e-2
+
+    # Explicit value should override the default
     optimise_lateral_offset(
         s,
         geom.curvature,
@@ -96,6 +111,4 @@ def test_fd_step_forwarded_to_minimize(monkeypatch):
         fd_step=1e-3,
         path_tol=1e-2,
     )
-    assert captured is not None
-    assert captured["options"].get("eps") == 1e-3
-    assert captured["tol"] == 1e-2
+    assert captured[1]["options"].get("eps") == 1e-3

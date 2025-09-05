@@ -34,7 +34,7 @@ def optimise_lateral_offset(
     buffer: float = 0.0,
     method: str = "SLSQP", # SLSQP (default) or trust-constr
     max_iterations: int | None = None,
-    fd_step: float | None = None, # default | None = None,
+    fd_step: float | None = 1e-2,
     path_tol: float = 1e-3,
     cost: str = "curvature",
     mu: float = 1.0,
@@ -82,8 +82,8 @@ def optimise_lateral_offset(
     fd_step:
         Step size for the finite-difference gradient approximation passed as
         ``eps`` in the ``options`` argument to
-        :func:`scipy.optimize.minimize`. If ``None``, SciPy's default is
-        used.
+        :func:`scipy.optimize.minimize`. Defaults to ``1e-2``. If ``None`` is
+        supplied, this default is used.
     path_tol:
         Convergence tolerance passed as ``tol`` to
         :func:`scipy.optimize.minimize`.
@@ -196,10 +196,9 @@ def optimise_lateral_offset(
     options = {}
     if max_iterations is not None:
         options["maxiter"] = max_iterations
-    if fd_step is not None:
-        options["eps"] = fd_step
-    if not options:
-        options = None
+    if fd_step is None:
+        fd_step = 1e-2
+    options["eps"] = fd_step
 
     result = minimize(
         objective,
