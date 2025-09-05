@@ -21,7 +21,6 @@ def plot_plan_view(
     x_path: Optional[Iterable[float]] = None,
     y_path: Optional[Iterable[float]] = None,
     ax: Optional[plt.Axes] = None,
-    **kwargs,
 ) -> plt.Axes:
     """Plot the track plan view.
 
@@ -31,17 +30,14 @@ def plot_plan_view(
         Coordinates of the track centreline.
     left_edge, right_edge:
         Arrays of shape ``(N, 2)`` giving ``x`` and ``y`` coordinates of the
-        track boundaries.
+        track boundaries.  Both must be provided; the deprecated
+        ``inner_edge``/``outer_edge`` aliases are no longer supported.
     x_path, y_path:
         Optional coordinates of the racing line to overlay.
     ax:
         Existing axes to draw on.  If ``None`` a new figure and axes are
         created.
     """
-    if left_edge is None:
-        left_edge = kwargs.get("inner_edge")
-    if right_edge is None:
-        right_edge = kwargs.get("outer_edge")
     if left_edge is None or right_edge is None:
         raise ValueError("Track boundaries must be provided")
 
