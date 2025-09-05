@@ -27,14 +27,15 @@ def read_track_csv(path: str | Path) -> pd.DataFrame:
     return pd.read_csv(path)
 
 
-def read_bike_params_csv(path: str | Path) -> Dict[str, float]:
+def read_bike_params_csv(path: str | Path) -> Dict[str, float | bool]:
     """Read motorcycle parameters from ``path``.
 
-    The parameter files are simple ``key,value`` CSVs.  A section starting
-    with a row whose first entry is ``rpm`` (used for torque curves) is
-    ignored by this helper as it is not required for the speed solver.
+    Values of ``true``/``false`` are interpreted as booleans while other entries
+    are parsed as floating point numbers.  A section starting with a row whose
+    first entry is ``rpm`` (used for torque curves) is ignored as it is not
+    required for the speed solver.
     """
-    params: Dict[str, float] = {}
+    params: Dict[str, float | bool] = {}
     with Path(path).open(newline="") as f:
         reader = csv.reader(f)
         for row in reader:
@@ -44,9 +45,20 @@ def read_bike_params_csv(path: str | Path) -> Dict[str, float]:
             if key.lower() == "rpm":
                 break
             try:
-                params[key] = float(row[1])
-            except (IndexError, ValueError):
+                raw_value = row[1].strip()
+            except IndexError:
                 continue
+
+            value_lower = raw_value.lower()
+            if value_lower == "true":
+                params[key] = True
+            elif value_lower == "false":
+                params[key] = False
+            else:
+                try:
+                    params[key] = float(raw_value)
+                except ValueError:
+                    continue
     return params
 
 
