@@ -127,3 +127,43 @@ def test_open_track_has_free_end_speeds() -> None:
     assert np.argmin(v) == corner_idx
     assert v[corner_idx] < v[0]
     assert v[corner_idx] < v[-1]
+
+
+def test_lean_angle_cap_limits_speed() -> None:
+    s = np.linspace(0.0, 100.0, 101)
+    kappa = np.full_like(s, 0.1)
+    v, ax, ay, limit, _, _, _ = solve_speed_profile(
+        s,
+        kappa,
+        mu=10.0,
+        a_wheelie_max=50.0,
+        a_brake=50.0,
+        v_start=0.0,
+        v_end=0.0,
+        phi_max_deg=30.0,
+        use_steer_rate_cap=False,
+    )
+    mid = len(s) // 2
+    expected = np.sqrt(9.81 * np.tan(np.deg2rad(30.0)) / 0.1)
+    assert np.isclose(v[mid], expected, atol=0.5)
+    assert limit[mid] == "lean"
+
+
+def test_steer_rate_cap_limits_speed() -> None:
+    s = np.linspace(0.0, 10.0, 101)
+    kappa = np.linspace(0.0, 10.0, 101)
+    v, ax, ay, limit, _, _, _ = solve_speed_profile(
+        s,
+        kappa,
+        mu=100.0,
+        a_wheelie_max=50.0,
+        a_brake=50.0,
+        v_start=0.0,
+        v_end=0.0,
+        kappa_dot_max=0.5,
+        use_lean_angle_cap=False,
+    )
+    mid = len(s) // 2
+    expected = 0.5 / 1.0
+    assert np.isclose(v[mid], expected, atol=0.1)
+    assert limit[mid] == "steer"
