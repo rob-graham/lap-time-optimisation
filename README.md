@@ -46,6 +46,28 @@ approximating gradients. This value can be adjusted through the `fd_step`
 argument of `optimise_lateral_offset` if finer control over the optimisation is
 needed.
 
+### Lean-angle and steer-rate limits
+
+The speed solver can enforce physical limits on the bike dynamics. When a
+maximum lean angle (``phi_max_deg``) is specified and lean capping is enabled,
+the solver reduces the speed in corners so that the required lean angle does not
+exceed this limit. Similarly, providing a maximum steer rate (``kappa_dot_max``)
+limits the speed through fast direction changes to ensure the steering rate
+remains within bounds.
+
+These parameters can be supplied in the bike parameter CSV via
+``phi_max_deg`` and ``kappa_dot_max`` along with boolean fields
+``use_lean_angle_cap`` and ``use_steer_rate_cap`` to enable or disable the caps.
+They may also be overridden from the command line:
+
+```bash
+python -m src.run_demo --phi-max-deg 55 --kappa-dot-max 0.8
+```
+
+``--phi-max-deg`` and ``--kappa-dot-max`` set the respective limits directly,
+while ``--no-lean-cap`` and ``--no-steer-cap`` disable enforcing the lean and
+steer caps even if values are present in the bike file.
+
 The track layout file follows the ``track_layout.csv`` format where each row
 describes the start of either a straight or constant-radius corner section. The
 columns ``x_m``, ``y_m``, ``section_type`` and ``radius_m`` define the geometry
