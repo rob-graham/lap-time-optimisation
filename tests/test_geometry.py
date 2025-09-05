@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 # Ensure src directory on path for test discovery when pytest runs directly
 sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
@@ -95,3 +96,23 @@ def test_open_track_endpoints_and_length(tmp_path: Path) -> None:
     assert np.isclose(length, expected_length, atol=1.0e-6)
     width = np.linalg.norm(geom.left_edge - geom.right_edge, axis=1)
     assert np.allclose(width, 10.0)
+
+
+def test_load_track_missing_columns(tmp_path: Path) -> None:
+    data = {"x_m": [0.0, 1.0], "y_m": [0.0, 1.0]}
+    df = pd.DataFrame(data)
+    track_file = tmp_path / "missing.csv"
+    df.to_csv(track_file, index=False)
+
+    with pytest.raises(ValueError, match="width_m"):
+        load_track(str(track_file), ds=1.0)
+
+
+def test_load_track_layout_missing_columns(tmp_path: Path) -> None:
+    data = {"x_m": [0.0], "y_m": [0.0], "section_type": ["straight"], "radius_m": [0.0]}
+    df = pd.DataFrame(data)
+    track_file = tmp_path / "missing_layout.csv"
+    df.to_csv(track_file, index=False)
+
+    with pytest.raises(ValueError, match="width_m"):
+        load_track_layout(str(track_file), ds=1.0)

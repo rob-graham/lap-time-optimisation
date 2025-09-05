@@ -66,6 +66,12 @@ def load_track(file_path: str, ds: float, closed: bool = True) -> TrackGeometry:
         raise ValueError("ds must be positive")
 
     df = pd.read_csv(file_path)
+    required = {"x_m", "y_m", "width_m"}
+    missing = required.difference(df.columns)
+    if missing:
+        missing_str = ", ".join(sorted(missing))
+        raise ValueError(f"track file missing required columns: {missing_str}")
+
     x = df["x_m"].to_numpy()
     y = df["y_m"].to_numpy()
     width = df["width_m"].to_numpy()
@@ -133,6 +139,12 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
         raise ValueError("ds must be positive")
 
     df = pd.read_csv(path)
+    required = {"x_m", "y_m", "width_m"}
+    missing = required.difference(df.columns)
+    if missing:
+        missing_str = ", ".join(sorted(missing))
+        raise ValueError(f"track file missing required columns: {missing_str}")
+
     x_nodes = df["x_m"].to_numpy(float)
     y_nodes = df["y_m"].to_numpy(float)
     width_nodes = df["width_m"].to_numpy(float)
