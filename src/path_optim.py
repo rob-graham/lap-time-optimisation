@@ -45,7 +45,7 @@ def optimise_lateral_offset(
     g: float = 9.81,
     speed_max_iterations: int = 50,
     speed_tol: float | None = None,
-    lap_time_weight: float = 100.0,  # default 1.0
+    lap_time_weight: float = 1.0,
 ) -> tuple[LateralOffsetSpline, int]:
     """Optimise lateral offset control points for a racing line.
 
