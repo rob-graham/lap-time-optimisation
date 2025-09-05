@@ -93,7 +93,8 @@ def optimise_lateral_offset(
         squared curvature and its derivative. ``"lap_time"`` minimises the
         lap time computed by :func:`speed_solver.solve_speed_profile`.
     lap_time_weight:
-        Multiplicative factor applied to the lap time when ``cost='lap_time'``.
+        Multiplicative factor applied to the normalised lap time when
+        ``cost='lap_time'``.
     mu, a_wheelie_max, a_brake, v_start, v_end, closed_loop, g:
         Parameters forwarded to :func:`speed_solver.solve_speed_profile` when
         ``cost='lap_time'``.
@@ -152,6 +153,34 @@ def optimise_lateral_offset(
     upper_bound = half_width - buffer
     lower_bound = -upper_bound
 
+    # Common arguments for the speed profile solver used in both the baseline
+    # computation and the objective function.
+    solve_kwargs = {
+        "v_start": v_start,
+        "v_end": v_end,
+        "closed_loop": closed_loop,
+        "g": g,
+        "max_iterations": speed_max_iterations,
+    }
+    if speed_tol is not None:
+        solve_kwargs["tol"] = speed_tol
+
+    # Compute a baseline lap time from the initial path so objective values are
+    # normalised to be O(1) regardless of ``lap_time_weight``.
+    if cost == "lap_time":
+        baseline_spline = LateralOffsetSpline(s_control, e_init)
+        baseline_kappa = path_curvature(s, baseline_spline, kappa_c)
+        _, _, _, _, baseline_lap_time, _, _ = speed_solver.solve_speed_profile(
+            s,
+            baseline_kappa,
+            mu,
+            a_wheelie_max,
+            a_brake,
+            **solve_kwargs,
+        )
+    else:
+        baseline_lap_time = 1.0
+
     def objective(e_ctrl: np.ndarray) -> float:
         spline = LateralOffsetSpline(s_control, e_ctrl)
         kappa = path_curvature(s, spline, kappa_c)
@@ -161,15 +190,6 @@ def optimise_lateral_offset(
             # np.trapz is used for backward compatibility.
             return float(np.trapz(integrand, s))
         else:  # cost == "lap_time"
-            solve_kwargs = {
-                "v_start": v_start,
-                "v_end": v_end,
-                "closed_loop": closed_loop,
-                "g": g,
-                "max_iterations": speed_max_iterations,
-            }
-            if speed_tol is not None:
-                solve_kwargs["tol"] = speed_tol
             _, _, _, _, lap_time, _, _ = speed_solver.solve_speed_profile(
                 s,
                 kappa,
@@ -178,7 +198,7 @@ def optimise_lateral_offset(
                 a_brake,
                 **solve_kwargs,
             )
-            return float(lap_time_weight * lap_time)
+            return float(lap_time_weight * lap_time / baseline_lap_time)
 
     if method == "trust-constr":
         def eval_e(e_ctrl: np.ndarray) -> np.ndarray:
@@ -198,7 +218,7 @@ def optimise_lateral_offset(
     if fd_step is None:
         fd_step = 1e-2
     options["eps"] = fd_step
-    options["ftol"] = path_tol
+    options["ftol"] = path_tol / baseline_lap_time if cost == "lap_time" else path_tol
 
     result = minimize(
         objective,

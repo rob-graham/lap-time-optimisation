@@ -102,6 +102,34 @@ def test_lap_time_cost_reduces_lap_time():
     assert lap_time_opt < lap_time_center
 
 
+def test_lap_time_weight_large_value_succeeds():
+    geom = load_track_layout("data/oneCornerTrack.csv", ds=10.0)
+    s = np.arange(len(geom.x)) * 10.0
+    s_control = np.linspace(s[0], s[-1], 6)
+
+    _, iterations = optimise_lateral_offset(
+        s,
+        geom.curvature,
+        geom.left_edge,
+        geom.right_edge,
+        s_control,
+        buffer=0.5,
+        cost="lap_time",
+        lap_time_weight=1000.0,
+        mu=1.0,
+        a_wheelie_max=9.81,
+        a_brake=9.81,
+        speed_max_iterations=20,
+        speed_tol=1e-2,
+        path_tol=1e-2,
+        v_start=0.0,
+        v_end=0.0,
+        fd_step=1e-3,
+    )
+
+    assert iterations > 0
+
+
 def test_fd_step_forwarded_to_minimize(monkeypatch):
     geom = load_track_layout("data/track_layout.csv", ds=10.0)
     s = np.arange(len(geom.x)) * 10.0
