@@ -88,6 +88,11 @@ def solve_speed_profile(
         ``ds / v``, the number of iterations performed and the solver
         runtime ``elapsed_s`` in seconds.
     """
+    if max_iterations <= 0:
+        raise ValueError("max_iterations must be positive")
+    if tol <= 0:
+        raise ValueError("tol must be positive")
+
     s = np.asarray(s, dtype=float)
     kappa = np.asarray(kappa, dtype=float)
     if s.shape != kappa.shape:

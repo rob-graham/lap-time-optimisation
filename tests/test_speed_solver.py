@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 # Add the ``src`` directory to the import path for test execution.
 sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
@@ -9,6 +10,34 @@ sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 from speed_solver import solve_speed_profile
 from geometry import load_track_layout
 from io_utils import read_bike_params_csv
+
+
+def test_invalid_max_iterations_raises() -> None:
+    s = np.array([0.0, 1.0])
+    kappa = np.zeros_like(s)
+    with pytest.raises(ValueError):
+        solve_speed_profile(
+            s,
+            kappa,
+            mu=1.0,
+            a_wheelie_max=9.81,
+            a_brake=11.772,
+            max_iterations=0,
+        )
+
+
+def test_invalid_tol_raises() -> None:
+    s = np.array([0.0, 1.0])
+    kappa = np.zeros_like(s)
+    with pytest.raises(ValueError):
+        solve_speed_profile(
+            s,
+            kappa,
+            mu=1.0,
+            a_wheelie_max=9.81,
+            a_brake=11.772,
+            tol=0.0,
+        )
 
 
 def test_straight_line_profile() -> None:
