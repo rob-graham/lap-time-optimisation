@@ -96,9 +96,13 @@ def run(
     if kappa_dot_max is None and (val := bike_params.get("kappa_dot_max")) is not None:
         kappa_dot_max = float(val)
     if use_lean_angle_cap is None:
-        use_lean_angle_cap = bool(bike_params.get("use_lean_angle_cap", True))
+        use_lean_angle_cap = bool(
+            bike_params.get("use_lean_angle_cap", phi_max_deg is not None)
+        )
     if use_steer_rate_cap is None:
-        use_steer_rate_cap = bool(bike_params.get("use_steer_rate_cap", True))
+        use_steer_rate_cap = bool(
+            bike_params.get("use_steer_rate_cap", kappa_dot_max is not None)
+        )
 
     # Path optimisation
     s_control = np.linspace(s[0], s[-1], n_ctrl)
