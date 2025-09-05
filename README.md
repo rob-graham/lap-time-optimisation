@@ -82,6 +82,29 @@ Each run writes two CSV files in a time-stamped folder under ``outputs``:
     Optimised path with speed profile and the same track edges for
     convenience.
 
+## Method B
+
+Method B formulates lap-time optimisation as a single optimal control problem
+solved with CasADi and IPOPT. Unlike Method A's sequential path and speed
+optimisation, this approach collocates the dynamics and optimises curvature and
+velocity simultaneously. It therefore introduces a dependency on CasADi,
+included in ``requirements.txt``.
+
+Example usage:
+
+```bash
+python -m run_method_b --track_csv data/sample_track.csv --bike_csv data/bike_params.csv --ds 0.5
+```
+
+Outputs are written under ``outputs/<timestamp>/method_b/`` containing the
+solution CSV and diagnostic plots.
+
+Additional solver options include ``--linear-solver`` to choose the IPOPT linear
+solver, ``--ipopt-opts`` for further IPOPT configuration, ``--warm-start`` to
+initialise from Method A results, and flags such as ``--use-slacks`` and
+``--no-auto-slack`` controlling slack variable behaviour. Tolerance and
+verbosity can be adjusted via ``--tol`` and ``--print-level``.
+
 ## License
 
 MIT License (to be defined).
