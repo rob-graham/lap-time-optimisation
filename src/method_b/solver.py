@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional
 
 import numpy as np
 import casadi as ca
@@ -114,41 +114,65 @@ def _build_nlp(
     return nlp, lbx, ubx, lbg, ubg, n_nodes, n_x, n_u
 
 
-def _load_method_a_warm_start(
-    source: Union[str, Path, Dict[str, Any]],
-    ocp: OCP,
-    n_nodes: int,
-) -> Dict[str, np.ndarray]:
-    """Load warm-start data produced by Method A.
+def _latest_method_a_results() -> Optional[Path]:
+    """Return path to the latest Method A ``results.csv`` if available."""
 
-    ``source`` may either be a mapping with the expected arrays or the path to
-    an ``.npz`` file containing them.  Only the keys present are used.  Arrays
-    ``x`` and ``u`` are reshaped and stacked to form an ``x0`` vector compatible
-    with the NLP decision variables.
-    """
+    out_dir = Path("outputs")
+    if not out_dir.is_dir():
+        return None
 
-    if isinstance(source, (str, bytes, Path)):
-        data = np.load(source, allow_pickle=True)
-        if isinstance(data, np.lib.npyio.NpzFile):
-            data_dict = {k: data[k] for k in data.files}
-        else:  # pragma: no cover - defensive branch
-            data_dict = dict(data)
-    else:
-        data_dict = dict(source)
+    candidates = [d for d in out_dir.iterdir() if d.is_dir()]
+    for directory in sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True):
+        csv_path = directory / "method_a" / "results.csv"
+        if csv_path.exists():
+            return csv_path
+    return None
 
-    warm: Dict[str, np.ndarray] = {}
-    x_guess = data_dict.get("x")
-    u_guess = data_dict.get("u")
-    if x_guess is not None and u_guess is not None:
-        x_guess = ocp.scale_x_array(np.asarray(x_guess).reshape(ocp.n_x, n_nodes))
-        u_guess = np.asarray(u_guess).reshape(ocp.n_u, n_nodes)
-        warm["x0"] = np.concatenate([x_guess.reshape(-1), u_guess.reshape(-1)])
 
-    lam_g = data_dict.get("lam_g") or data_dict.get("lam_g0")
-    if lam_g is not None:
-        warm["lam_g0"] = np.asarray(lam_g).reshape(-1)
+def _centreline_initialisation(ocp: OCP, n_nodes: int) -> Dict[str, np.ndarray]:
+    """Initial guess corresponding to the reference centreline."""
 
-    return warm
+    x_guess = np.zeros((ocp.n_x, n_nodes))
+    x_guess[3, :] = ocp.kappa_c
+    x_guess = ocp.scale_x_array(x_guess)
+    u_guess = np.zeros((ocp.n_u, n_nodes))
+    x0 = np.concatenate([x_guess.reshape(-1), u_guess.reshape(-1)])
+    return {"x0": x0}
+
+
+def _load_method_a_results(ocp: OCP, grid: np.ndarray) -> Dict[str, np.ndarray]:
+    """Load warm-start data from the latest Method A CSV output."""
+
+    csv_path = _latest_method_a_results()
+    if csv_path is None:
+        return {}
+
+    try:
+        data = np.genfromtxt(csv_path, delimiter=",", names=True)
+    except OSError:
+        return {}
+
+    required = {"e", "kappa", "v", "psi"}
+    if not required.issubset(data.dtype.names or {}):
+        return {}
+
+    e = np.asarray(data["e"], dtype=float)
+    kappa = np.asarray(data["kappa"], dtype=float)
+    v = np.asarray(data["v"], dtype=float)
+    psi = np.asarray(data["psi"], dtype=float)
+
+    if e.size != grid.size:
+        return {}
+
+    x_guess = np.vstack([e, psi, v, kappa])
+    u_kappa = np.gradient(kappa, grid, edge_order=2)
+    dv_ds = np.gradient(v, grid, edge_order=2)
+    a_x = v * dv_ds
+    u_guess = np.vstack([u_kappa, a_x])
+
+    x_guess = ocp.scale_x_array(x_guess)
+    x0 = np.concatenate([x_guess.reshape(-1), u_guess.reshape(-1)])
+    return {"x0": x0}
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +186,7 @@ def solve(
     n_points: int,
     *,
     closed_loop: bool = True,
-    warm_start_from_method_a: Union[str, Dict[str, Any], None] = None,
+    warm_start_from_method_a: bool = True,
     use_slacks: bool = False,
     auto_slack_retry: bool = True,
     tol: float = 1e-8,
@@ -179,8 +203,8 @@ def solve(
     s_start, s_end, n_points:
         Parameters passed to :func:`create_grid`.
     warm_start_from_method_a:
-        Either a mapping or a path to data produced by Method A used to
-        initialise the IPOPT solver.
+        If ``True`` attempt to initialise the solver from the latest Method A
+        outputs.  When ``False`` a simple centreline initialisation is used.
     use_slacks:
         If ``True`` slack variables are included from the start.
     auto_slack_retry:
@@ -208,14 +232,15 @@ def solve(
 
     solver = ca.nlpsol("solver", "ipopt", nlp, opts)
 
-    warm: Dict[str, np.ndarray] = {}
-    if warm_start_from_method_a is not None:
-        warm = _load_method_a_warm_start(warm_start_from_method_a, ocp, n_nodes)
+    if warm_start_from_method_a:
+        warm = _load_method_a_results(ocp, grid)
+    else:
+        warm = {}
+    if not warm:
+        warm = _centreline_initialisation(ocp, n_nodes)
 
     x0 = warm.get("x0")
-    lam_g0 = warm.get("lam_g0")
-
-    sol = solver(lbx=lbx, ubx=ubx, lbg=lbg, ubg=ubg, x0=x0, lam_g0=lam_g0)
+    sol = solver(lbx=lbx, ubx=ubx, lbg=lbg, ubg=ubg, x0=x0)
     stats = solver.stats()
 
     if (use_slacks or auto_slack_retry) and stats.get("return_status") not in {"Solve_Succeeded", "Solved_Succeeded"}:
@@ -223,7 +248,7 @@ def solve(
             ocp, grid, closed_loop=closed_loop, slack=True
         )
         solver = ca.nlpsol("solver", "ipopt", nlp, opts)
-        sol = solver(lbx=lbx, ubx=ubx, lbg=lbg, ubg=ubg, x0=x0, lam_g0=lam_g0)
+        sol = solver(lbx=lbx, ubx=ubx, lbg=lbg, ubg=ubg, x0=x0)
         stats = solver.stats()
 
     z = np.array(sol["x"]).reshape(-1)
