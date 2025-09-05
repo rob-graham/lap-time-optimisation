@@ -43,7 +43,7 @@ def run(
     cost: str = "curvature",
     closed: bool | None = None,
     max_iter: int | None = None,
-    path_tol: float = 1e-3,
+    path_tol: float = 1e-6,
     speed_max_iter: int = 50,
     speed_tol: float | None = None,
 ) -> tuple[float, Path]:
@@ -234,7 +234,7 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--path-tol",
         type=float,
-        default=1e-3,
+        default=1e-6,
         help="Tolerance for path optimisation",
     )
     parser.add_argument(

@@ -37,7 +37,9 @@ The path optimisation and speed profile solver accuracy can be traded for
 faster execution using `--max-iter` and `--path-tol` for the former and
 `--speed-max-iter` and `--speed-tol` for the latter. Smaller iteration counts or
 looser convergence tolerances reduce run time but may slightly increase lap
-time estimates.
+time estimates. The path optimiser defaults to a convergence tolerance of
+`1e-6`; relaxing this (for example to `1e-3`) speeds up execution at the cost of
+path accuracy.
 
 By default the path optimiser uses a finite-difference step size of `1e-2` when
 approximating gradients. This value can be adjusted through the `fd_step`
