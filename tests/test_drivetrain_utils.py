@@ -77,3 +77,51 @@ def test_select_gear(speed: float, expected_idx: int, expected_rpm: float) -> No
     else:
         assert rpm > params["shift_rpm"]
 
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"rw": 0.0},
+        {"rw": -0.1},
+        {"primary": 0.0},
+        {"final_drive": -1.0},
+        {"gear_ratio": 0.0},
+    ],
+)
+def test_engine_rpm_invalid_arguments(kwargs: dict[str, float]) -> None:
+    params, gears = _load_params()
+    args = dict(
+        v_mps=10.0,
+        primary=params["primary"],
+        final_drive=params["final_drive"],
+        gear_ratio=gears[0],
+        rw=params["rw"],
+    )
+    args.update(kwargs)
+    with pytest.raises(ValueError):
+        engine_rpm(**args)
+
+
+def test_select_gear_invalid_gears() -> None:
+    params, gears = _load_params()
+    with pytest.raises(ValueError):
+        select_gear(
+            10.0,
+            [],
+            params["shift_rpm"],
+            params["primary"],
+            params["final_drive"],
+            params["rw"],
+        )
+    with pytest.raises(ValueError):
+        bad_gears = list(gears)
+        bad_gears[0] = 0.0
+        select_gear(
+            10.0,
+            bad_gears,
+            params["shift_rpm"],
+            params["primary"],
+            params["final_drive"],
+            params["rw"],
+        )
+

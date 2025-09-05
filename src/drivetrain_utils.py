@@ -28,6 +28,11 @@ def engine_rpm(
     rw:
         Effective wheel radius in metres.
     """
+    if rw <= 0:
+        raise ValueError("wheel radius must be positive")
+    if primary <= 0 or final_drive <= 0 or gear_ratio <= 0:
+        raise ValueError("ratios must be positive")
+
     omega_w = v_mps / rw
     omega_e = omega_w * primary * final_drive * gear_ratio
     return omega_e * 60.0 / (2 * math.pi)
@@ -42,6 +47,10 @@ def select_gear(
     rw: float,
 ) -> float:
     """Return the highest gear ratio that keeps engine RPM below ``shift_rpm``."""
+    if not gears:
+        raise ValueError("gears must be non-empty")
+    if any(g <= 0 for g in gears):
+        raise ValueError("gears must contain only positive ratios")
 
     # ``gears`` is expected to be ordered from lowest to highest gear number
     # (i.e. highest to lowest ratio).  Iterate in this order and select the
