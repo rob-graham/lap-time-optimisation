@@ -8,6 +8,7 @@ boundaries.
 from __future__ import annotations
 
 from typing import Iterable, Sequence
+import warnings
 
 import numpy as np
 from scipy.optimize import minimize, NonlinearConstraint
@@ -77,16 +78,16 @@ def optimise_lateral_offset(
     max_iterations:
         Maximum number of iterations for the optimiser. Passed as
         ``maxiter`` in the ``options`` argument to
-        :func:`scipy.optimize.minimize`. If ``None``, SciPy's default is
-        used.
+        :func:`scipy.optimize.minimize`. If ``None``, a default of ``100``
+        is used.
     fd_step:
         Step size for the finite-difference gradient approximation passed as
         ``eps`` in the ``options`` argument to
         :func:`scipy.optimize.minimize`. Defaults to ``1e-2``. If ``None`` is
         supplied, this default is used.
     path_tol:
-        Convergence tolerance passed as ``tol`` to
-        :func:`scipy.optimize.minimize`.
+        Convergence tolerance forwarded as ``ftol`` via the ``options``
+        argument to :func:`scipy.optimize.minimize`.
     cost:
         Objective to minimise. ``"curvature"`` minimises the integral of the
         squared curvature and its derivative. ``"lap_time"`` minimises the
@@ -193,12 +194,11 @@ def optimise_lateral_offset(
 
         constraints = {"type": "ineq", "fun": inequality}
 
-    options = {}
-    if max_iterations is not None:
-        options["maxiter"] = max_iterations
+    options = {"maxiter": max_iterations if max_iterations is not None else 100}
     if fd_step is None:
         fd_step = 1e-2
     options["eps"] = fd_step
+    options["ftol"] = path_tol
 
     result = minimize(
         objective,
@@ -206,8 +206,13 @@ def optimise_lateral_offset(
         method=method,
         constraints=constraints,
         options=options,
-        tol=path_tol,
     )
+
+    if result.nit <= 1:
+        warnings.warn(
+            f"Optimisation terminated after {result.nit} iteration(s)",
+            RuntimeWarning,
+        )
 
     if not result.success:
         raise RuntimeError("Optimisation failed: " + result.message)

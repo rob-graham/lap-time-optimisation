@@ -99,7 +99,8 @@ def test_fd_step_forwarded_to_minimize(monkeypatch):
     )
     # Default should be forwarded as 1e-2
     assert captured and captured[0]["options"].get("eps") == 1e-2
-    assert captured[0]["tol"] == 1e-2
+    assert captured[0]["options"].get("ftol") == 1e-2
+    assert captured[0]["tol"] is None
 
     # Explicit value should override the default
     optimise_lateral_offset(
