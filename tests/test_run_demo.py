@@ -5,6 +5,7 @@ import re
 
 import numpy as np
 import pandas as pd
+import pytest
 
 # Ensure src package on path for test discovery when pytest runs directly
 sys.path.append(str(Path(__file__).resolve().parents[1]))
@@ -78,3 +79,24 @@ def test_rpm_capped_top_gear(tmp_path) -> None:
     top_gear = results["gear"].max()
     rpm_top = results.loc[results["gear"] == top_gear, "rpm"]
     assert np.all(rpm_top <= shift_rpm)
+
+
+def test_run_raises_without_gears(tmp_path) -> None:
+    """run() should raise a clear error when no gear ratios are supplied."""
+
+    bike_src = Path("data/bike_params_sv650.csv").read_text().splitlines()
+    modified = [line for line in bike_src if not line.startswith("gear")]
+    bike_file = tmp_path / "bike_params_no_gears.csv"
+    bike_file.write_text("\n".join(modified))
+
+    with pytest.raises(ValueError, match="No gear ratios provided"):
+        run(
+            "data/oneCornerTrack.csv",
+            str(bike_file),
+            ds=1.0,
+            buffer=0.5,
+            n_ctrl=20,
+            closed=False,
+            speed_tol=1e-2,
+            path_tol=1e-2,
+        )
