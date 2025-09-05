@@ -36,7 +36,7 @@ def optimise_lateral_offset(
     method: str = "SLSQP", # SLSQP (default) or trust-constr
     max_iterations: int | None = None,
     fd_step: float | None = 1e-2,
-    path_tol: float = 1e-3,
+    path_tol: float = 1e-6,
     cost: str = "curvature",
     mu: float = 1.0,
     a_wheelie_max: float = 9.81,
