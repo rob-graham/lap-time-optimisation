@@ -35,6 +35,7 @@ def optimise_lateral_offset(
     method: str = "SLSQP", # SLSQP (default) or trust-constr
     max_iterations: int | None = None,
     fd_step: float | None = None, # default | None = None,
+    path_tol: float = 1e-3,
     cost: str = "curvature",
     mu: float = 1.0,
     a_wheelie_max: float = 9.81,
@@ -83,6 +84,9 @@ def optimise_lateral_offset(
         ``eps`` in the ``options`` argument to
         :func:`scipy.optimize.minimize`. If ``None``, SciPy's default is
         used.
+    path_tol:
+        Convergence tolerance passed as ``tol`` to
+        :func:`scipy.optimize.minimize`.
     cost:
         Objective to minimise. ``"curvature"`` minimises the integral of the
         squared curvature and its derivative. ``"lap_time"`` minimises the
@@ -131,6 +135,7 @@ def optimise_lateral_offset(
                 buffer=buffer,
                 method=method,
                 max_iterations=max_iterations,
+                path_tol=path_tol,
                 cost="curvature",
             )
             e_init = warm_start.e_control
@@ -202,6 +207,7 @@ def optimise_lateral_offset(
         method=method,
         constraints=constraints,
         options=options,
+        tol=path_tol,
     )
 
     if not result.success:
