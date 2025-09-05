@@ -20,6 +20,7 @@ def plot_plan_view(
     right_edge: np.ndarray | None = None,
     x_path: Optional[Iterable[float]] = None,
     y_path: Optional[Iterable[float]] = None,
+    path_label: str = "Racing line",
     ax: Optional[plt.Axes] = None,
 ) -> plt.Axes:
     """Plot the track plan view.
@@ -49,7 +50,7 @@ def plot_plan_view(
     ax.plot(x_center, y_center, color="k", label="Centreline")
 
     if x_path is not None and y_path is not None:
-        ax.plot(x_path, y_path, color="tab:red", label="Racing line")
+        ax.plot(x_path, y_path, color="tab:red", label=path_label)
 
     ax.set_aspect("equal", adjustable="box")
     ax.set_xlabel("x [m]")
@@ -61,15 +62,18 @@ def plot_plan_view(
 def plot_speed_profile(
     s: Iterable[float],
     speed: Iterable[float],
+    label: str | None = None,
     ax: Optional[plt.Axes] = None,
 ) -> plt.Axes:
     """Plot speed as a function of distance ``s`` along the track."""
     if ax is None:
         _, ax = plt.subplots()
 
-    ax.plot(s, speed, color="tab:blue")
+    ax.plot(s, speed, color="tab:blue", label=label)
     ax.set_xlabel("Distance along track [m]")
     ax.set_ylabel("Speed [m/s]")
+    if label is not None:
+        ax.legend()
     return ax
 
 
@@ -78,13 +82,14 @@ def plot_speed_caps(
     v: Iterable[float],
     v_lean: Iterable[float] | None = None,
     v_steer: Iterable[float] | None = None,
+    label: str = "Speed",
     ax: Optional[plt.Axes] = None,
 ) -> plt.Axes:
     """Overlay speed caps with the final speed profile."""
     if ax is None:
         _, ax = plt.subplots()
 
-    ax.plot(s, v, label="Speed", color="tab:blue")
+    ax.plot(s, v, label=label, color="tab:blue")
 
     if v_lean is not None:
         ax.plot(s, v_lean, label="Lean cap", color="tab:orange", linestyle="--")
@@ -102,14 +107,16 @@ def plot_acceleration_profile(
     s: Iterable[float],
     ax_longitudinal: Iterable[float],
     ay_lateral: Iterable[float],
+    label: str | None = None,
     ax: Optional[plt.Axes] = None,
 ) -> plt.Axes:
     """Plot longitudinal and lateral acceleration versus distance."""
     if ax is None:
         _, ax = plt.subplots()
 
-    ax.plot(s, ax_longitudinal, label="Longitudinal", color="tab:green")
-    ax.plot(s, ay_lateral, label="Lateral", color="tab:orange")
+    suffix = f" ({label})" if label else ""
+    ax.plot(s, ax_longitudinal, label=f"Longitudinal{suffix}", color="tab:green")
+    ax.plot(s, ay_lateral, label=f"Lateral{suffix}", color="tab:orange")
     ax.set_xlabel("Distance along track [m]")
     ax.set_ylabel("Acceleration [m/s$^2$]")
     ax.legend()
