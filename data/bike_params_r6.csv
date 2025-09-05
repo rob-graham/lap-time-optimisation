@@ -18,3 +18,7 @@ gear6,1.150,,
 final_drive,2.9375,,
 eta_driveline,0.95,,
 T_peak,63,,
+phi_max_deg,55
+kappa_dot_max,0.8
+use_lean_angle_cap,true
+use_steer_rate_cap,true
