@@ -15,6 +15,7 @@ from .transcription import (
     trapezoidal_collocation,
     decision_variables,
     assemble_constraints,
+    extract_unscaled_solution,
 )
 
 
@@ -95,8 +96,7 @@ def _build_nlp(
 
 def _load_method_a_warm_start(
     source: Union[str, Path, Dict[str, Any]],
-    n_x: int,
-    n_u: int,
+    ocp: OCP,
     n_nodes: int,
 ) -> Dict[str, np.ndarray]:
     """Load warm-start data produced by Method A.
@@ -120,8 +120,8 @@ def _load_method_a_warm_start(
     x_guess = data_dict.get("x")
     u_guess = data_dict.get("u")
     if x_guess is not None and u_guess is not None:
-        x_guess = np.asarray(x_guess).reshape(n_x, n_nodes)
-        u_guess = np.asarray(u_guess).reshape(n_u, n_nodes)
+        x_guess = ocp.scale_x_array(np.asarray(x_guess).reshape(ocp.n_x, n_nodes))
+        u_guess = np.asarray(u_guess).reshape(ocp.n_u, n_nodes)
         warm["x0"] = np.concatenate([x_guess.reshape(-1), u_guess.reshape(-1)])
 
     lam_g = data_dict.get("lam_g") or data_dict.get("lam_g0")
@@ -187,7 +187,7 @@ def solve(
 
     warm: Dict[str, np.ndarray] = {}
     if warm_start_from_method_a is not None:
-        warm = _load_method_a_warm_start(warm_start_from_method_a, n_x, n_u, n_nodes)
+        warm = _load_method_a_warm_start(warm_start_from_method_a, ocp, n_nodes)
 
     x0 = warm.get("x0")
     lam_g0 = warm.get("lam_g0")
@@ -202,7 +202,5 @@ def solve(
         stats = solver.stats()
 
     z = np.array(sol["x"]).reshape(-1)
-    n_dec_x = n_x * n_nodes
-    x_sol = z[:n_dec_x].reshape(n_x, n_nodes)
-    u_sol = z[n_dec_x : n_dec_x + n_u * n_nodes].reshape(n_u, n_nodes)
+    x_sol, u_sol = extract_unscaled_solution(ocp, z, n_nodes)
     return SolverResult(x=x_sol, u=u_sol, grid=grid, stats=stats)

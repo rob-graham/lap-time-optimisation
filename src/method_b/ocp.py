@@ -9,7 +9,7 @@ ingredients required for racing-line optimisation such as friction limits and a
 power envelope.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Tuple
 
 import numpy as np
@@ -65,9 +65,59 @@ class OCP:
     w_a_x: float = 1e-4
     """Regularisation weight for longitudinal acceleration."""
 
+    # Numerical safeguard for speed denominators
+    v_eps: float = 1e-3
+
     # State and control dimensions
     n_x: int = 4
     n_u: int = 2
+
+    # Scaling factors for state variables (set in ``__post_init__``)
+    e_scale: float = field(init=False)
+    kappa_scale: float = field(init=False)
+
+    def __post_init__(self) -> None:  # pragma: no cover - simple assignment
+        """Initialise scaling factors based on bounds."""
+        self.e_scale = self.track_half_width if self.track_half_width else 1.0
+        self.kappa_scale = max(abs(self.kappa_bounds[0]), abs(self.kappa_bounds[1])) or 1.0
+
+    # ------------------------------------------------------------------
+    # Scaling helpers
+    def scale_x(self, x: ca.SX) -> ca.SX:
+        """Scale state vector for improved conditioning."""
+
+        return ca.vertcat(
+            x[0] / self.e_scale,
+            x[1],
+            x[2],
+            x[3] / self.kappa_scale,
+        )
+
+    def unscale_x(self, x: ca.SX) -> ca.SX:
+        """Invert :meth:`scale_x` for CasADi vectors."""
+
+        return ca.vertcat(
+            x[0] * self.e_scale,
+            x[1],
+            x[2],
+            x[3] * self.kappa_scale,
+        )
+
+    def unscale_x_array(self, x: np.ndarray) -> np.ndarray:
+        """Invert :meth:`scale_x` for numeric arrays."""
+
+        x = np.array(x, copy=True)
+        x[0, :] *= self.e_scale
+        x[3, :] *= self.kappa_scale
+        return x
+
+    def scale_x_array(self, x: np.ndarray) -> np.ndarray:
+        """Scale numeric state arrays."""
+
+        x = np.array(x, copy=True)
+        x[0, :] /= self.e_scale
+        x[3, :] /= self.kappa_scale
+        return x
 
     # ------------------------------------------------------------------
     # Symbolic variables
@@ -83,15 +133,16 @@ class OCP:
     def dynamics(self, x: ca.SX, u: ca.SX) -> ca.SX:
         """State derivatives with respect to arc length ``s``."""
 
+        x = self.unscale_x(x)
         e, psi, v, kappa = x[0], x[1], x[2], x[3]
         u_kappa, a_x = u[0], u[1]
 
         # Small-angle Frenet relations
         de_ds = psi
         dpsi_ds = kappa - self.kappa_c
-        dv_ds = a_x / ca.fmax(v, 1e-3)
+        dv_ds = a_x / ca.fmax(v, self.v_eps)
         dkappa_ds = u_kappa
-        return ca.vertcat(de_ds, dpsi_ds, dv_ds, dkappa_ds)
+        return self.scale_x(ca.vertcat(de_ds, dpsi_ds, dv_ds, dkappa_ds))
 
     # ------------------------------------------------------------------
     # Path constraints
@@ -101,11 +152,16 @@ class OCP:
         drag = 0.5 * self.rho * self.CdA * v**2
         rr = self.Crr * self.mass * self.g
         # P = F * v  =>  a_max = (P/v - drag - rr) / m
-        return self.power / ca.fmax(self.mass * v, 1e-3) - drag / self.mass - rr / self.mass
+        return (
+            self.power / ca.fmax(self.mass * v, self.v_eps)
+            - drag / self.mass
+            - rr / self.mass
+        )
 
     def path_constraints(self, x: ca.SX, u: ca.SX) -> ca.SX:
         """Return stacked path-constraint expressions."""
 
+        x = self.unscale_x(x)
         e, _, v, kappa = x[0], x[1], x[2], x[3]
         a_x = u[1]
 
@@ -128,8 +184,8 @@ class OCP:
         e_min = -self.track_half_width
         e_max = self.track_half_width
 
-        x_min = [e_min, -ca.inf, 0.0, self.kappa_bounds[0]]
-        x_max = [e_max, ca.inf, ca.inf, self.kappa_bounds[1]]
+        x_min = [e_min / self.e_scale, -ca.inf, 0.0, self.kappa_bounds[0] / self.kappa_scale]
+        x_max = [e_max / self.e_scale, ca.inf, ca.inf, self.kappa_bounds[1] / self.kappa_scale]
 
         u_min = [self.u_kappa_bounds[0], -self.a_brake]
         u_max = [self.u_kappa_bounds[1], self.a_wheelie_max]
@@ -148,9 +204,10 @@ class OCP:
     def stage_cost(self, x: ca.SX, u: ca.SX) -> ca.SX:
         """Lap-time objective with control regularisation."""
 
+        x = self.unscale_x(x)
         v = x[2]
         u_kappa, a_x = u[0], u[1]
-        inv_v = 1.0 / ca.fmax(v, 1e-3)
+        inv_v = 1.0 / ca.fmax(v, self.v_eps)
         return inv_v + self.w_u_kappa * u_kappa**2 + self.w_a_x * a_x**2
 
 
