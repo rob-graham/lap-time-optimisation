@@ -96,13 +96,16 @@ def run(
     s_end = ds * (geom.x.size - 1)
     n_points = geom.x.size
 
+    warm_start_path = Path(warm_start) if warm_start else None
+
     result = solver.solve(
         ocp_def,
         s_start,
         s_end,
         n_points,
         closed_loop=closed_loop,
-        warm_start_from_method_a=warm_start,
+        warm_start_from_method_a=warm_start_path is not None,
+        warm_start_file=warm_start_path,
         use_slacks=use_slacks,
         auto_slack_retry=auto_slack_retry,
         tol=tol,
