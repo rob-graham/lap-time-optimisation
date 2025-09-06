@@ -151,8 +151,9 @@ class OCP:
 
         kappa_c = self.kappa_c[k] if self.kappa_c.size > 1 else float(self.kappa_c)
 
-        # Small-angle Frenet relations
-        de_ds = psi
+        # Nonlinear Frenet relations with angular wrapping for stability
+        psi_wrapped = ca.atan2(ca.sin(psi), ca.cos(psi))
+        de_ds = ca.sin(psi_wrapped)
         dpsi_ds = kappa - kappa_c
         dv_ds = a_x / ca.fmax(v, self.v_eps)
         dkappa_ds = u_kappa
