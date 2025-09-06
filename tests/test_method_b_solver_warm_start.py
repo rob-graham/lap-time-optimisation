@@ -1,6 +1,9 @@
 import sys
 from pathlib import Path
 
+import sys
+from pathlib import Path
+
 import numpy as np
 
 
@@ -20,8 +23,10 @@ def _write_warm_start_csv(path: Path, n: int) -> None:
 
 
 def test_load_method_a_results_from_file(tmp_path):
-    ocp_def = OCP()
     grid = np.linspace(0.0, 1.0, 5)
+    kappa = np.zeros_like(grid)
+    width = np.full_like(grid, 5.0)
+    ocp_def = OCP(kappa_c=kappa, track_half_width=width)
     csv_file = tmp_path / "warm.csv"
     _write_warm_start_csv(csv_file, grid.size)
 

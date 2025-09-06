@@ -55,7 +55,7 @@ def _build_nlp(
     N = n_nodes - 1
 
     # Path constraints at each node
-    g_path = [ocp.path_constraints(x[:, k], u[:, k]) for k in range(n_nodes)]
+    g_path = [ocp.path_constraints(x[:, k], u[:, k], k) for k in range(n_nodes)]
     g_path = ca.vertcat(*g_path) if g_path else ca.SX.zeros(0)
 
     # Objective (trapezoidal integration of stage cost)
