@@ -82,8 +82,8 @@ def trapezoidal_collocation(ocp: OCP, grid: np.ndarray) -> Tuple[ca.SX, ca.SX, c
         xk1 = x[:, k + 1]
         uk = u[:, k]
         uk1 = u[:, k + 1]
-        fk = ocp.dynamics(xk, uk)
-        fk1 = ocp.dynamics(xk1, uk1)
+        fk = ocp.dynamics(xk, uk, k)
+        fk1 = ocp.dynamics(xk1, uk1, k + 1)
         defect = xk1 - xk - 0.5 * h * (fk + fk1)
         defects.append(defect)
 

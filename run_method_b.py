@@ -69,12 +69,10 @@ def run(
     geom = load_track_layout(track_csv, ds, closed=closed)
     bike_params = read_bike_params_csv(bike_csv)
 
-    centre = np.column_stack((geom.x, geom.y))
-    left_dist = np.linalg.norm(geom.left_edge - centre, axis=1)
-    right_dist = np.linalg.norm(geom.right_edge - centre, axis=1)
-    track_half_width = float(np.min(np.minimum(left_dist, right_dist)))
+    width = np.linalg.norm(geom.left_edge - geom.right_edge, axis=1)
+    track_half_width = 0.5 * width
 
-    kappa_c = float(np.mean(geom.curvature))
+    kappa_c = geom.curvature
 
     ocp_def = ocp.OCP(
         kappa_c=kappa_c,

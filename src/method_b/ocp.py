@@ -22,11 +22,11 @@ class OCP:
 
     # ------------------------------------------------------------------
     # Problem parameters
-    kappa_c: float = 0.0
-    """Curvature of the reference centre line (assumed constant)."""
+    kappa_c: np.ndarray | float = 0.0
+    """Curvature profile of the reference centre line."""
 
-    track_half_width: float = 5.0
-    """Half of the track width used for lateral bounds."""
+    track_half_width: np.ndarray | float = 5.0
+    """Half of the track width (may vary along the track)."""
 
     mu: float = 1.0
     """Tyre-road friction coefficient."""
@@ -78,7 +78,10 @@ class OCP:
 
     def __post_init__(self) -> None:  # pragma: no cover - simple assignment
         """Initialise scaling factors based on bounds."""
-        self.e_scale = self.track_half_width if self.track_half_width else 1.0
+        self.kappa_c = np.asarray(self.kappa_c, dtype=float)
+        self.track_half_width = np.asarray(self.track_half_width, dtype=float)
+        max_hw = float(np.max(self.track_half_width)) if self.track_half_width.size else 1.0
+        self.e_scale = max_hw
         self.kappa_scale = max(abs(self.kappa_bounds[0]), abs(self.kappa_bounds[1])) or 1.0
 
     # ------------------------------------------------------------------
@@ -130,16 +133,27 @@ class OCP:
 
     # ------------------------------------------------------------------
     # Dynamics in the arc-length domain
-    def dynamics(self, x: ca.SX, u: ca.SX) -> ca.SX:
-        """State derivatives with respect to arc length ``s``."""
+    def dynamics(self, x: ca.SX, u: ca.SX, k: int) -> ca.SX:
+        """State derivatives with respect to arc length ``s``.
+
+        Parameters
+        ----------
+        x, u:
+            State and control vectors.
+        k:
+            Index of the current grid point used to look up the reference
+            curvature value.
+        """
 
         x = self.unscale_x(x)
         e, psi, v, kappa = x[0], x[1], x[2], x[3]
         u_kappa, a_x = u[0], u[1]
 
+        kappa_c = self.kappa_c[k] if self.kappa_c.size > 1 else float(self.kappa_c)
+
         # Small-angle Frenet relations
         de_ds = psi
-        dpsi_ds = kappa - self.kappa_c
+        dpsi_ds = kappa - kappa_c
         dv_ds = a_x / ca.fmax(v, self.v_eps)
         dkappa_ds = u_kappa
         return self.scale_x(ca.vertcat(de_ds, dpsi_ds, dv_ds, dkappa_ds))
@@ -158,8 +172,8 @@ class OCP:
             - rr / self.mass
         )
 
-    def path_constraints(self, x: ca.SX, u: ca.SX) -> ca.SX:
-        """Return stacked path-constraint expressions."""
+    def path_constraints(self, x: ca.SX, u: ca.SX, k: int) -> ca.SX:
+        """Return stacked path-constraint expressions for node ``k``."""
 
         x = self.unscale_x(x)
         e, _, v, kappa = x[0], x[1], x[2], x[3]
@@ -169,7 +183,9 @@ class OCP:
         friction = a_x**2 + ay**2
         power_con = a_x - self._a_power_max(v)
 
-        cons = [e, friction, power_con]
+        width = self.track_half_width[k] if self.track_half_width.size > 1 else float(self.track_half_width)
+
+        cons = [e / width, friction, power_con]
         if self.phi_max_deg is not None:
             lean = v**2 * ca.fabs(kappa)
             cons.append(lean)
@@ -181,8 +197,9 @@ class OCP:
     def bounds(
         self,
     ) -> Tuple[list[float], list[float], list[float], list[float], list[float], list[float]]:
-        e_min = -self.track_half_width
-        e_max = self.track_half_width
+        max_hw = float(np.max(self.track_half_width)) if self.track_half_width.size else float(self.track_half_width)
+        e_min = -max_hw
+        e_max = max_hw
 
         x_min = [e_min / self.e_scale, -ca.inf, 0.0, self.kappa_bounds[0] / self.kappa_scale]
         x_max = [e_max / self.e_scale, ca.inf, ca.inf, self.kappa_bounds[1] / self.kappa_scale]
@@ -190,8 +207,8 @@ class OCP:
         u_min = [self.u_kappa_bounds[0], -self.a_brake]
         u_max = [self.u_kappa_bounds[1], self.a_wheelie_max]
 
-        g_min = [e_min, 0.0, -ca.inf]
-        g_max = [e_max, (self.mu * self.g) ** 2, 0.0]
+        g_min = [-1.0, 0.0, -ca.inf]
+        g_max = [1.0, (self.mu * self.g) ** 2, 0.0]
 
         if self.phi_max_deg is not None:
             g_min.append(0.0)
