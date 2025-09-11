@@ -11,8 +11,10 @@ from src.method_b import solver
 
 
 def test_closed_loop_adds_periodic_constraints():
-    ocp_def = OCP()
     grid = np.linspace(0.0, 1.0, 5)
+    kappa = np.zeros_like(grid)
+    width = np.full_like(grid, 5.0)
+    ocp_def = OCP(kappa_c=kappa, track_half_width=width)
     _, lbx, ubx, lbg, ubg, n_nodes, n_x, _ = solver._build_nlp(
         ocp_def, grid, closed_loop=True
     )
@@ -24,8 +26,10 @@ def test_closed_loop_adds_periodic_constraints():
 
 
 def test_open_loop_fixes_start_states():
-    ocp_def = OCP()
     grid = np.linspace(0.0, 1.0, 5)
+    kappa = np.zeros_like(grid)
+    width = np.full_like(grid, 5.0)
+    ocp_def = OCP(kappa_c=kappa, track_half_width=width)
     _, lbx, ubx, lbg_open, _, _, n_x, _ = solver._build_nlp(
         ocp_def, grid, closed_loop=False
     )

@@ -69,12 +69,10 @@ def run(
     geom = load_track_layout(track_csv, ds, closed=closed)
     bike_params = read_bike_params_csv(bike_csv)
 
-    centre = np.column_stack((geom.x, geom.y))
-    left_dist = np.linalg.norm(geom.left_edge - centre, axis=1)
-    right_dist = np.linalg.norm(geom.right_edge - centre, axis=1)
-    track_half_width = float(np.min(np.minimum(left_dist, right_dist)))
+    width = np.linalg.norm(geom.left_edge - geom.right_edge, axis=1)
+    track_half_width = 0.5 * width
 
-    kappa_c = float(np.mean(geom.curvature))
+    kappa_c = geom.curvature
 
     ocp_def = ocp.OCP(
         kappa_c=kappa_c,
@@ -96,13 +94,16 @@ def run(
     s_end = ds * (geom.x.size - 1)
     n_points = geom.x.size
 
+    warm_start_path = Path(warm_start) if warm_start else None
+
     result = solver.solve(
         ocp_def,
         s_start,
         s_end,
         n_points,
         closed_loop=closed_loop,
-        warm_start_from_method_a=warm_start,
+        warm_start_from_method_a=warm_start_path is not None,
+        warm_start_file=warm_start_path,
         use_slacks=use_slacks,
         auto_slack_retry=auto_slack_retry,
         tol=tol,

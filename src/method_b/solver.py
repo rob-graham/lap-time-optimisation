@@ -55,7 +55,7 @@ def _build_nlp(
     N = n_nodes - 1
 
     # Path constraints at each node
-    g_path = [ocp.path_constraints(x[:, k], u[:, k]) for k in range(n_nodes)]
+    g_path = [ocp.path_constraints(x[:, k], u[:, k], k) for k in range(n_nodes)]
     g_path = ca.vertcat(*g_path) if g_path else ca.SX.zeros(0)
 
     # Objective (trapezoidal integration of stage cost)
@@ -140,10 +140,22 @@ def _centreline_initialisation(ocp: OCP, n_nodes: int) -> Dict[str, np.ndarray]:
     return {"x0": x0}
 
 
-def _load_method_a_results(ocp: OCP, grid: np.ndarray) -> Dict[str, np.ndarray]:
-    """Load warm-start data from the latest Method A CSV output."""
+def _load_method_a_results(
+    ocp: OCP, grid: np.ndarray, csv_path: Optional[Path] = None
+) -> Dict[str, np.ndarray]:
+    """Load warm-start data from a Method A CSV output.
 
-    csv_path = _latest_method_a_results()
+    Parameters
+    ----------
+    ocp, grid:
+        Problem definition and discretisation grid.
+    csv_path:
+        Explicit path to a Method A ``results.csv`` file. When ``None`` the
+        latest available output is used.
+    """
+
+    if csv_path is None:
+        csv_path = _latest_method_a_results()
     if csv_path is None:
         return {}
 
@@ -187,6 +199,7 @@ def solve(
     *,
     closed_loop: bool = True,
     warm_start_from_method_a: bool = True,
+    warm_start_file: Optional[Path] = None,
     use_slacks: bool = False,
     auto_slack_retry: bool = True,
     tol: float = 1e-8,
@@ -203,8 +216,11 @@ def solve(
     s_start, s_end, n_points:
         Parameters passed to :func:`create_grid`.
     warm_start_from_method_a:
-        If ``True`` attempt to initialise the solver from the latest Method A
-        outputs.  When ``False`` a simple centreline initialisation is used.
+        If ``True`` attempt to initialise the solver from Method A outputs.
+        When ``False`` a simple centreline initialisation is used.
+    warm_start_file:
+        Optional path to a Method A CSV file used for warm starting when
+        ``warm_start_from_method_a`` is ``True``.
     use_slacks:
         If ``True`` slack variables are included from the start.
     auto_slack_retry:
@@ -233,7 +249,7 @@ def solve(
     solver = ca.nlpsol("solver", "ipopt", nlp, opts)
 
     if warm_start_from_method_a:
-        warm = _load_method_a_results(ocp, grid)
+        warm = _load_method_a_results(ocp, grid, csv_path=warm_start_file)
     else:
         warm = {}
     if not warm:
