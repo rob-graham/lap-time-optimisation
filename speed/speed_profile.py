@@ -58,9 +58,14 @@ def load_csv(path: str) -> List[TrackPoint]:
         for row in reader:
             if not row:
                 continue
-            section = row.get("section_type", "").strip().lower()
+            raw_section = row.get("section_type", "").strip()
+            section = raw_section.lower()
             if not section:
                 section = "corner"
+            elif section not in ("straight", "corner"):
+                raise ValueError(
+                    f"invalid section_type '{raw_section}' in row {reader.line_num}: {row}"
+                )
             pts.append(
                 TrackPoint(
                     float(row["x_m"]),
