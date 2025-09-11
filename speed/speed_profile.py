@@ -451,8 +451,14 @@ def compute_speed_profile(
     final speeds respectively, which can help remove jitter on high resolution
     tracks.  Additional optional limits can be applied via ``phi_max_deg`` and
     ``kappa_dot_max`` to cap lean angle and steer rate.
-    The function returns a list of speeds in metres per second for each path
-    point and the overall lap time in seconds.
+
+    Returns a tuple ``(speeds, lap_time, curvatures, limit_reason)`` where:
+
+    * ``speeds`` – list of float speeds at each path point (metres/second).
+    * ``lap_time`` – total time to traverse the path (seconds).
+    * ``curvatures`` – list of path curvatures at each point (1/metre).
+    * ``limit_reason`` – list of strings describing what capped the speed at
+      each point, e.g. ``"corner"`` or ``"rpm"``.
     """
 
     n = len(pts)
