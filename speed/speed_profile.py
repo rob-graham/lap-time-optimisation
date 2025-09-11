@@ -401,11 +401,21 @@ def traction_circle_cap(
 
 
 def select_gear(v: float, bp: BikeParams) -> float:
-    """Select the highest gear that keeps engine rpm below the shift point."""
-    for g in reversed(bp.gears):
+    """Return the lowest gear whose engine speed does not exceed ``shift_rpm``."""
+    # ``bp.gears`` is expected to be ordered from first to top gear
+    for g in bp.gears:
         if engine_rpm(v, bp, g) <= bp.shift_rpm:
             return g
-    return min(bp.gears)
+    # fall back to top gear if all would exceed the shift point
+    return bp.gears[-1]
+
+
+def max_speed(bp: BikeParams) -> float:
+    """Maximum speed attainable at the shift RPM in top gear."""
+    top = bp.gears[-1]
+    omega_e = bp.shift_rpm * 2 * math.pi / 60.0
+    omega_w = omega_e / (bp.primary * bp.final_drive * top)
+    return omega_w * bp.rw
 
 
 def compute_speed_profile(
@@ -502,6 +512,7 @@ def compute_speed_profile(
 
     v: List[float] = []
     limit_reason: List[str] = []
+    v_top = max_speed(bp)
     for i in range(n):
         if section[i] == "corner":
             a_lat_cap = bp.mu * bp.g * math.cos(grade[i]) * math.cos(camber[i])
@@ -515,6 +526,9 @@ def compute_speed_profile(
             if use_steer_rate_cap and kappa_dot_max is not None and v0 > v_steer[i]:
                 v0 = v_steer[i]
                 limiter = "steer"
+            if v0 > v_top:
+                v0 = v_top
+                limiter = "rpm"
             v.append(v0)
             limit_reason.append(limiter)
         else:
@@ -526,6 +540,9 @@ def compute_speed_profile(
             if use_steer_rate_cap and kappa_dot_max is not None and v0 > v_steer[i]:
                 v0 = v_steer[i]
                 limiter = "steer"
+            if v0 > v_top:
+                v0 = v_top
+                limiter = "rpm"
             v.append(v0)
             limit_reason.append(limiter)
 
@@ -549,6 +566,9 @@ def compute_speed_profile(
                     a = cap if a >= 0 else -cap
                     limiter = "corner"
             v_next = math.sqrt(max(0.0, v_i * v_i + 2 * a * ds[i]))
+            if v_next > v_top:
+                v_next = v_top
+                limiter = "rpm"
             if use_lean_angle_cap and phi_max_deg is not None and v_next > v_lean[i + 1]:
                 v_next = v_lean[i + 1]
                 limiter = "lean"
@@ -569,6 +589,9 @@ def compute_speed_profile(
                     limiter = "corner"
             a_tot = a_brk + bp.g * math.sin(grade[i])
             v_prev = math.sqrt(max(0.0, v[i + 1] * v[i + 1] + 2 * a_tot * ds[i]))
+            if v_prev > v_top:
+                v_prev = v_top
+                limiter = "rpm"
             if use_lean_angle_cap and phi_max_deg is not None and v_prev > v_lean[i]:
                 v_prev = v_lean[i]
                 limiter = "lean"
@@ -588,6 +611,9 @@ def compute_speed_profile(
         if closed_loop:
             for i in range(n):
                 v_smooth[i] = 0.25 * v[(i - 1) % n] + 0.5 * v[i] + 0.25 * v[(i + 1) % n]
+                if v_smooth[i] > v_top:
+                    v_smooth[i] = v_top
+                    limit_reason[i] = "rpm"
             v = v_smooth
             v_loop = min(v[0], v[-1])
             v[0] = v[-1] = v_loop
@@ -599,6 +625,9 @@ def compute_speed_profile(
                     v_smooth[i] = 0.5 * v[i] + 0.5 * v[i - 1]
                 else:
                     v_smooth[i] = 0.25 * v[i - 1] + 0.5 * v[i] + 0.25 * v[i + 1]
+                if v_smooth[i] > v_top:
+                    v_smooth[i] = v_top
+                    limit_reason[i] = "rpm"
             v = v_smooth
 
     # recompute limiting factors for deceleration segments

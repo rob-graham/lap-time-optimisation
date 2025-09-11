@@ -6,7 +6,8 @@ from speed_profile import BikeParams, select_gear
 
 
 def _make_bp():
-    return BikeParams(gears=(1.150, 1.286, 1.444, 1.667, 2.0, 2.583))
+    # gear ratios ordered from first to top gear
+    return BikeParams(gears=(2.583, 2.0, 1.667, 1.444, 1.286, 1.150))
 
 
 def test_select_gear_low_speed():
