@@ -19,5 +19,5 @@ def test_save_csv_length_mismatch(tmp_path):
     rpms = [1000.0, 2000.0]
     curvatures = [0.0, 0.0]
     limiters = ["limit"]
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         save_csv(tmp_path / "out.csv", pts, dists, speeds, gears, rpms, curvatures, limiters)

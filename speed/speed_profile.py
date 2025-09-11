@@ -97,7 +97,7 @@ def save_csv(
 ) -> None:
     """Save results including curvature, section type and limiting factor."""
     n = len(pts)
-    assert (
+    if not (
         n
         == len(dists)
         == len(speeds)
@@ -105,7 +105,8 @@ def save_csv(
         == len(rpms)
         == len(curvatures)
         == len(limiters)
-    ), "all input lists must have the same length"
+    ):
+        raise ValueError("all input lists must have the same length")
     
     with open(path, "w", newline="") as f:
         writer = csv.writer(f)
