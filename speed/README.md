@@ -2,6 +2,8 @@
 
 This project computes a motorcycle speed profile around a race track.
 
+Requires Python 3.10 or newer (uses PEP 604 union types) and NumPy.
+
 The core script, `speed_profile.py`, loads a CSV file containing `x_m`, `y_m`,
 `section_type`, optional `radius_m`, `camber_rad` and `grade_rad` columns that
 describe a racing line. The `radius_m` column allows corners to be specified by
@@ -34,6 +36,7 @@ python speed_profile.py input.csv output.csv [options]
 * `--sweeps` – number of forward/backward passes for the solver
 * `--curv-smooth` – neighbour-averaging passes for corner radius (helps on noisy tracks)
 * `--speed-smooth` – neighbour-averaging passes for final speed profile
+* `--open`/`--closed` – override automatic detection of open vs. closed tracks
 * Command line options override any values loaded from the parameter CSV.
 
 The parameter CSV may include a `gears` row containing a comma-separated list
@@ -56,5 +59,5 @@ The physics model and solver are contained in `compute_speed_profile` and the
 conditions, adjust the fields in `BikeParams` or expose additional command-line
 arguments in `main`.
 
-Tests are not provided; when modifying the code, run `python speed_profile.py --help`
-to ensure the script loads correctly.
+Tests live in the `tests` directory; run `pytest` to verify changes. Use
+`python speed_profile.py --help` to see all available options.
