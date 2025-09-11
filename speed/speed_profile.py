@@ -19,6 +19,7 @@ import csv
 from dataclasses import dataclass
 from typing import List, Tuple, Iterable, Optional
 import math
+import numpy as np
 
 
 @dataclass
@@ -404,6 +405,10 @@ def compute_speed_profile(
     sweeps: int = 8,
     curv_smoothing: int = 3,
     speed_smoothing: int = 3,
+    phi_max_deg: Optional[float] = None,
+    kappa_dot_max: Optional[float] = None,
+    use_lean_angle_cap: bool = False,
+    use_steer_rate_cap: bool = False,
 ) -> Tuple[List[float], float, List[float], List[str]]:
     """Compute a speed profile, curvature and limiting factor for *pts*.
 
@@ -411,9 +416,10 @@ def compute_speed_profile(
     resampled path, applying acceleration limits from the engine, aerodynamics
     and optional traction circle.  When ``trail_braking`` is true the same
     traction limit is applied while decelerating.  ``curv_smoothing`` and
-    ``speed_smoothing`` control how many neighbour-averaging passes are applied
-    to the corner radius and final speeds respectively, which can help remove
-    jitter on high resolution tracks.
+    ``speed_smoothing`` control neighbour-averaging passes for corner radius and
+    final speeds respectively, which can help remove jitter on high resolution
+    tracks.  Additional optional limits can be applied via ``phi_max_deg`` and
+    ``kappa_dot_max`` to cap lean angle and steer rate.
     The function returns a list of speeds in metres per second for each path
     point and the overall lap time in seconds.
     """
@@ -428,6 +434,10 @@ def compute_speed_profile(
     grade = [p.grade for p in pts]
     section = [p.section for p in pts]
     ds = [math.hypot(x[i + 1] - x[i], y[i + 1] - y[i]) for i in range(n - 1)]
+    s_vals = [0.0]
+    for d in ds:
+        s_vals.append(s_vals[-1] + d)
+    s = np.array(s_vals)
 
     R = [math.inf] * n
     for i in range(n):
@@ -452,6 +462,27 @@ def compute_speed_profile(
                     R_s[i] = 0.25 * R[im1] + 0.5 * R[i] + 0.25 * R[ip1]
         R = R_s
 
+    kappa = np.zeros(n)
+    for i in range(n):
+        if math.isfinite(R[i]):
+            kappa[i] = 1.0 / max(R[i], 1e-9)
+
+    if phi_max_deg is not None and use_lean_angle_cap:
+        phi_max_rad = math.radians(phi_max_deg)
+        v_lean = np.sqrt(bp.g * math.tan(phi_max_rad) / np.maximum(kappa, 1e-6))
+    else:
+        v_lean = np.full(n, math.inf)
+
+    if kappa_dot_max is not None and use_steer_rate_cap:
+        dkappa_ds = np.gradient(kappa, s, edge_order=2)
+        window = 5 if n >= 5 else 3 if n >= 3 else 1
+        if window > 1:
+            kernel = np.ones(window) / window
+            dkappa_ds = np.convolve(dkappa_ds, kernel, mode="same")
+        v_steer = kappa_dot_max / np.maximum(np.abs(dkappa_ds), 1e-6)
+    else:
+        v_steer = np.full(n, math.inf)
+
     v: List[float] = []
     limit_reason: List[str] = []
     for i in range(n):
@@ -460,11 +491,26 @@ def compute_speed_profile(
             v0 = math.sqrt(
                 max(0.0, R[i] * (a_lat_cap + bp.g * math.sin(camber[i])))
             )
+            limiter = "corner"
+            if use_lean_angle_cap and phi_max_deg is not None and v0 > v_lean[i]:
+                v0 = v_lean[i]
+                limiter = "lean"
+            if use_steer_rate_cap and kappa_dot_max is not None and v0 > v_steer[i]:
+                v0 = v_steer[i]
+                limiter = "steer"
             v.append(v0)
-            limit_reason.append("corner")
+            limit_reason.append(limiter)
         else:
-            v.append(100.0)  # large seed for straights
-            limit_reason.append("power")
+            v0 = 100.0
+            limiter = "power"
+            if use_lean_angle_cap and phi_max_deg is not None and v0 > v_lean[i]:
+                v0 = v_lean[i]
+                limiter = "lean"
+            if use_steer_rate_cap and kappa_dot_max is not None and v0 > v_steer[i]:
+                v0 = v_steer[i]
+                limiter = "steer"
+            v.append(v0)
+            limit_reason.append(limiter)
 
     for _ in range(sweeps):
         for i in range(n - 1):
@@ -486,6 +532,12 @@ def compute_speed_profile(
                     a = cap if a >= 0 else -cap
                     limiter = "corner"
             v_next = math.sqrt(max(0.0, v_i * v_i + 2 * a * ds[i]))
+            if use_lean_angle_cap and phi_max_deg is not None and v_next > v_lean[i + 1]:
+                v_next = v_lean[i + 1]
+                limiter = "lean"
+            if use_steer_rate_cap and kappa_dot_max is not None and v_next > v_steer[i + 1]:
+                v_next = v_steer[i + 1]
+                limiter = "steer"
             if v_next < v[i + 1]:
                 v[i + 1] = v_next
                 limit_reason[i + 1] = limiter
@@ -500,6 +552,12 @@ def compute_speed_profile(
                     limiter = "corner"
             a_tot = a_brk + bp.g * math.sin(grade[i])
             v_prev = math.sqrt(max(0.0, v[i + 1] * v[i + 1] + 2 * a_tot * ds[i]))
+            if use_lean_angle_cap and phi_max_deg is not None and v_prev > v_lean[i]:
+                v_prev = v_lean[i]
+                limiter = "lean"
+            if use_steer_rate_cap and kappa_dot_max is not None and v_prev > v_steer[i]:
+                v_prev = v_steer[i]
+                limiter = "steer"
             if v_prev < v[i]:
                 v[i] = v_prev
                 limit_reason[i] = "braking" if limiter == "stoppie" else limiter
@@ -530,14 +588,21 @@ def compute_speed_profile(
             else:
                 limit_reason[i] = "braking"
 
+    if use_lean_angle_cap and phi_max_deg is not None:
+        for i in range(n):
+            if math.isclose(v[i], v_lean[i], rel_tol=1e-3, abs_tol=1e-2):
+                limit_reason[i] = "lean"
+    if use_steer_rate_cap and kappa_dot_max is not None:
+        for i in range(n):
+            if math.isclose(v[i], v_steer[i], rel_tol=1e-3, abs_tol=1e-2):
+                limit_reason[i] = "steer"
+
     lap_time = 0.0
     for i in range(n - 1):
         v_avg = max(1e-3, 0.5 * (v[i] + v[i + 1]))
         lap_time += ds[i] / v_avg
 
-    curvatures = [0.0] * n
-    for i in range(n):
-        curvatures[i] = 1.0 / max(R[i], 1e-9)
+    curvatures = kappa.tolist()
 
     return v, lap_time, curvatures, limit_reason
 
@@ -695,6 +760,10 @@ def main():
         sweeps=args.sweeps,
         curv_smoothing=args.curv_smooth,
         speed_smoothing=args.speed_smooth,
+        phi_max_deg=bp.phi_max_deg,
+        kappa_dot_max=bp.kappa_dot_max,
+        use_lean_angle_cap=bp.use_lean_angle_cap,
+        use_steer_rate_cap=bp.use_steer_rate_cap,
     )
     gears: List[int] = []
     rpms: List[float] = []
