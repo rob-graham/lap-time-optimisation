@@ -286,6 +286,9 @@ def resample(points: List[TrackPoint], step: float, closed: bool = True) -> List
     point is omitted.
     """
 
+    if step <= 0.0:
+        raise ValueError("step must be positive")
+
     if len(points) < 2:
         return points
 
