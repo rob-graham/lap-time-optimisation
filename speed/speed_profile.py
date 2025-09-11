@@ -17,7 +17,7 @@ options.
 import argparse
 import csv
 from dataclasses import dataclass
-from typing import List, Tuple, Iterable
+from typing import List, Tuple, Iterable, Optional
 import math
 
 
@@ -340,6 +340,10 @@ class BikeParams:
     gears: Tuple[float, ...] = (2.583, 2.000, 1.667, 1.444, 1.286, 1.150)
     eta_driveline: float = 0.95
     T_peak: float = 63.0
+    phi_max_deg: Optional[float] = None
+    kappa_dot_max: Optional[float] = None
+    use_lean_angle_cap: bool = False
+    use_steer_rate_cap: bool = False
 
     def torque_curve(self, rpm: float) -> float:
         """Simple flat torque curve."""
@@ -615,6 +619,10 @@ def main():
     parser.add_argument("--gears", type=str, default=None, help="Comma separated gear ratios")
     parser.add_argument("--eta_driveline", type=float, default=None)
     parser.add_argument("--T_peak", type=float, default=None)
+    parser.add_argument("--phi_max_deg", type=float, default=None)
+    parser.add_argument("--kappa_dot_max", type=float, default=None)
+    parser.add_argument("--use_lean_angle_cap", action="store_true", default=None)
+    parser.add_argument("--use_steer_rate_cap", action="store_true", default=None)
 
     parser.add_argument("--traction-circle", action="store_true",
                         help="Enable traction circle for acceleration")
@@ -647,6 +655,8 @@ def main():
                     bp.gears = _parse_gears(value)
                 elif key.startswith("gear") and key[4:].isdigit():
                     gear_rows[int(key[4:])] = float(value)
+                elif key in {"use_lean_angle_cap", "use_steer_rate_cap"}:
+                    bp.__setattr__(key, value.strip().lower() == "true")
                 elif hasattr(bp, key):
                     setattr(bp, key, float(value))
         if gear_rows:
@@ -672,6 +682,10 @@ def main():
         bp.gears = _parse_gears(args.gears)
     _override("eta_driveline", args.eta_driveline)
     _override("T_peak", args.T_peak)
+    _override("phi_max_deg", args.phi_max_deg)
+    _override("kappa_dot_max", args.kappa_dot_max)
+    _override("use_lean_angle_cap", args.use_lean_angle_cap)
+    _override("use_steer_rate_cap", args.use_steer_rate_cap)
 
     speeds, lap_time, curvatures, limiters = compute_speed_profile(
         pts,
