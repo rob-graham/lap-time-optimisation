@@ -36,7 +36,7 @@ def _map_indices(src_pts, dst_pts, src_indices):
 
 
 def test_step_curvature_consistency():
-    csv_path = pathlib.Path(__file__).resolve().parent.parent / "sample_track.csv"
+    csv_path = pathlib.Path(__file__).resolve().parent.parent / "track_layout.csv"
     pts = load_csv(csv_path)
     bp = BikeParams()
 
