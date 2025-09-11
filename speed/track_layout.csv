@@ -1,0 +1,13 @@
+x_m,y_m,section_type,radius_m,width_m,camber_rad,grade_rad
+0,0,straight,inf,8,0,0
+0,150,corner,-50,8,0,0
+50,200,straight,inf,8,0,0
+150,200,corner,-20,8,0,0
+170,180,corner,20,8,0,0
+190,160,corner,-20,8,0,0
+210,140,straight,inf,8,0,0
+210,-90,corner,-90,8,0,0
+120,-180,straight,inf,8,0,0
+30,-180,corner,-30,8,0,0
+0,-150,straight,inf,8,0,0
+0,0,straight,inf,8,0,0
