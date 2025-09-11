@@ -17,7 +17,7 @@ options.
 import argparse
 import csv
 from dataclasses import dataclass
-from typing import List, Tuple, Iterable, Optional
+from typing import List, Tuple, Optional
 import math
 import numpy as np
 
