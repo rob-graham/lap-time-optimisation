@@ -25,6 +25,10 @@ python speed_profile.py input.csv output.csv [options]
 
 * `--step` – resampling distance in metres (default: 2)
 * `--params-file` – load motorcycle and environment parameters from CSV
+* `--phi-max-deg` – maximum lean angle in degrees
+* `--kappa-dot-max` – maximum steer rate in 1/s
+* `--use-lean-angle-cap`/`--no-use-lean-angle-cap` – toggle lean angle cap
+* `--use-steer-rate-cap`/`--no-use-steer-rate-cap` – toggle steer rate cap
 * `--traction-circle` – limit acceleration by lateral grip
 * `--trail-braking` – apply traction limit while braking
 * `--sweeps` – number of forward/backward passes for the solver

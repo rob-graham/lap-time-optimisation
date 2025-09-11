@@ -684,10 +684,34 @@ def main():
     parser.add_argument("--gears", type=str, default=None, help="Comma separated gear ratios")
     parser.add_argument("--eta_driveline", type=float, default=None)
     parser.add_argument("--T_peak", type=float, default=None)
-    parser.add_argument("--phi_max_deg", type=float, default=None)
-    parser.add_argument("--kappa_dot_max", type=float, default=None)
-    parser.add_argument("--use_lean_angle_cap", action="store_true", default=None)
-    parser.add_argument("--use_steer_rate_cap", action="store_true", default=None)
+    parser.add_argument(
+        "--phi-max-deg",
+        dest="phi_max_deg",
+        type=float,
+        default=None,
+        help="Maximum lean angle in degrees",
+    )
+    parser.add_argument(
+        "--kappa-dot-max",
+        dest="kappa_dot_max",
+        type=float,
+        default=None,
+        help="Maximum steer rate in 1/s",
+    )
+    parser.add_argument(
+        "--use-lean-angle-cap",
+        dest="use_lean_angle_cap",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable lean angle speed cap",
+    )
+    parser.add_argument(
+        "--use-steer-rate-cap",
+        dest="use_steer_rate_cap",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Enable steer rate speed cap",
+    )
 
     parser.add_argument("--traction-circle", action="store_true",
                         help="Enable traction circle for acceleration")
