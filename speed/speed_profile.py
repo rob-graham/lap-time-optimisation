@@ -38,6 +38,7 @@ class TrackPoint:
     camber: float
     grade: float
     radius_m: float = 0.0
+    width_m: float = 0.0
 
 
 def load_csv(path: str) -> List[TrackPoint]:
@@ -45,7 +46,8 @@ def load_csv(path: str) -> List[TrackPoint]:
 
     The expected columns with a header row are ``x_m``, ``y_m``,
     ``section_type`` (``straight`` or ``corner``), ``camber_rad``,
-    ``grade_rad`` and optionally ``radius_m`` (signed, metres).
+    ``grade_rad`` and optionally ``radius_m`` (signed, metres) and ``width_m``
+    (metres).
     ``section_type`` defaults to ``"corner"`` when missing or empty.
     """
 
@@ -66,6 +68,7 @@ def load_csv(path: str) -> List[TrackPoint]:
                     float(row.get("camber_rad", 0.0)),
                     float(row.get("grade_rad", 0.0)),
                     float(row.get("radius_m", 0.0)),
+                    float(row.get("width_m", 0.0)),
                 )
             )
     return pts
@@ -267,112 +270,34 @@ def _arc_from_radius(
     ]
 
 
-def _chain_arcs(run: List[TrackPoint], step: float, prev: TrackPoint) -> List[TrackPoint]:
-    """Return a sequence of points following chained arcs through *run*.
-
-    ``prev`` is the point immediately preceding ``run`` and is used to orient the
-    first arc so it joins tangentially to the incoming segment.
-    """
-
-    resampled: List[TrackPoint] = []
-    heading = math.atan2(run[0].y - prev.y, run[0].x - prev.x)
-    for i in range(len(run) - 1):
-        start = run[i]
-        end = run[i + 1]
-        if i == 0:
-            seg = _arc_from_radius(
-                (start.x, start.y), (end.x, end.y), start.radius_m, step, heading
-            )
-        else:
-            seg = _arc_from_radius((start.x, start.y), (end.x, end.y), start.radius_m, step)
-        pts_iter = seg if i == 0 else seg[1:]
-        for x, y in pts_iter:
-            resampled.append(
-                TrackPoint(x, y, start.section, start.camber, start.grade, start.radius_m)
-            )
-    if resampled:
-        resampled[-1] = TrackPoint(
-            run[-1].x,
-            run[-1].y,
-            run[-1].section,
-            run[-1].camber,
-            run[-1].grade,
-            run[-1].radius_m,
-        )
-    return resampled
-
-
 def resample(points: List[TrackPoint], step: float) -> List[TrackPoint]:
-    """Resample *points* using circular arcs so that adjacent points are
-    approximately *step* metres apart.
+    """Resample *points* so adjacent samples are roughly ``step`` metres apart."""
 
-    The metadata (section type, camber and grade) for new points is copied from
-    the start of each segment.  Segments marked ``"straight"`` are forced to be
-    perfectly straight even if neighbouring points would otherwise form an arc.
-    """
-
-    if len(points) < 3:
+    if len(points) < 2:
         return points
 
     if math.hypot(points[0].x - points[-1].x, points[0].y - points[-1].y) > 1e-6:
         points = points + [points[0]]
 
     resampled: List[TrackPoint] = []
-    n = len(points) - 1  # last equals first
-    i = 0
-    skip_last = False
-    while i < n:
-        if skip_last and i == n - 1:
-            break
-        pt = points[i]
-        if pt.section == "corner":
-            j = i + 1
-            while j < n and points[j].section == "corner":
-                j += 1
-            if j - i > 1:
-                seg_pts = _chain_arcs(points[i:j], step, points[(i - 1) % n])
-                pts_iter = seg_pts if not resampled else seg_pts[1:]
-                resampled.extend(pts_iter)
-                last = points[j - 1]
-                next_pt = points[j]
-                seg = _arc_from_radius(
-                    (last.x, last.y), (next_pt.x, next_pt.y), last.radius_m, step
-                )
-                for x, y in seg[1:]:
-                    resampled.append(
-                        TrackPoint(x, y, last.section, last.camber, last.grade, last.radius_m)
-                    )
-                i = j - 1
-            else:
-                prev_pt = points[(i - 1) % n]
-                next_pt = points[(i + 1) % n]
-                seg = _arc_from_radius(
-                    (prev_pt.x, prev_pt.y),
-                    (next_pt.x, next_pt.y),
-                    pt.radius_m,
-                    step,
-                )
-                pts_iter = seg if not resampled else seg[1:]
-                for x, y in pts_iter:
-                    resampled.append(
-                        TrackPoint(x, y, pt.section, pt.camber, pt.grade, pt.radius_m)
-                    )
-                if i == 0:
-                    skip_last = True
-        else:
-            p_curr = (pt.x, pt.y)
-            p_next = (points[(i + 1) % n].x, points[(i + 1) % n].y)
-            # Ignore the previous point so _arc_segment degenerates to a straight
-            # line between *p_curr* and *p_next*.
-            seg = _arc_segment(p_curr, p_curr, p_next, step)
-            pts_iter = seg if not resampled else seg[1:]
-            for x, y in pts_iter:
-                resampled.append(
-                    TrackPoint(x, y, pt.section, pt.camber, pt.grade, pt.radius_m)
-                )
-        i += 1
+    heading = math.atan2(points[0].y - points[-2].y, points[0].x - points[-2].x)
 
-    resampled.append(resampled[0])
+    for i in range(len(points) - 1):
+        start = points[i]
+        end = points[i + 1]
+        if start.section == "corner":
+            seg = _arc_from_radius((start.x, start.y), (end.x, end.y), start.radius_m, step, heading)
+        else:
+            seg = _arc_segment((start.x, start.y), (start.x, start.y), (end.x, end.y), step)
+        pts_iter = seg if i == 0 else seg[1:]
+        for x, y in pts_iter:
+            resampled.append(TrackPoint(x, y, start.section, start.camber, start.grade, start.radius_m, start.width_m))
+        if len(seg) >= 2:
+            heading = math.atan2(seg[-1][1] - seg[-2][1], seg[-1][0] - seg[-2][0])
+
+    if resampled and (resampled[0].x != resampled[-1].x or resampled[0].y != resampled[-1].y):
+        resampled.append(resampled[0])
+
     return resampled
 
 

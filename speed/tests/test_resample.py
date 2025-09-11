@@ -10,8 +10,7 @@ def _angle_diff(a, b):
     return abs(d)
 
 def test_first_corner_tangent():
-    pts = load_csv("sample_track.csv")
-    csv_path = pathlib.Path(__file__).resolve().parent.parent / "sample_track.csv"
+    csv_path = pathlib.Path(__file__).resolve().parent.parent / "track_layout.csv"
     pts = load_csv(csv_path)
     res = resample(pts, step=5.0)
     idx = next(
