@@ -271,17 +271,26 @@ def _arc_from_radius(
     ]
 
 
-def resample(points: List[TrackPoint], step: float) -> List[TrackPoint]:
-    """Resample *points* so adjacent samples are roughly ``step`` metres apart."""
+def resample(points: List[TrackPoint], step: float, closed: bool = True) -> List[TrackPoint]:
+    """Resample *points* so adjacent samples are roughly ``step`` metres apart.
+
+    When ``closed`` is ``True`` the path is treated as a closed loop and the
+    first point is appended to the end if necessary. For open tracks the
+    initial heading is derived from the first segment and the duplicate end
+    point is omitted.
+    """
 
     if len(points) < 2:
         return points
 
-    if math.hypot(points[0].x - points[-1].x, points[0].y - points[-1].y) > 1e-6:
+    if closed and math.hypot(points[0].x - points[-1].x, points[0].y - points[-1].y) > 1e-6:
         points = points + [points[0]]
 
     resampled: List[TrackPoint] = []
-    heading = math.atan2(points[0].y - points[-2].y, points[0].x - points[-2].x)
+    if closed:
+        heading = math.atan2(points[0].y - points[-2].y, points[0].x - points[-2].x)
+    else:
+        heading = math.atan2(points[1].y - points[0].y, points[1].x - points[0].x)
 
     for i in range(len(points) - 1):
         start = points[i]
@@ -296,7 +305,9 @@ def resample(points: List[TrackPoint], step: float) -> List[TrackPoint]:
         if len(seg) >= 2:
             heading = math.atan2(seg[-1][1] - seg[-2][1], seg[-1][0] - seg[-2][0])
 
-    if resampled and (resampled[0].x != resampled[-1].x or resampled[0].y != resampled[-1].y):
+    if closed and resampled and (
+        resampled[0].x != resampled[-1].x or resampled[0].y != resampled[-1].y
+    ):
         resampled.append(resampled[0])
 
     return resampled
@@ -409,6 +420,7 @@ def compute_speed_profile(
     kappa_dot_max: Optional[float] = None,
     use_lean_angle_cap: bool = False,
     use_steer_rate_cap: bool = False,
+    closed_loop: bool = True,
 ) -> Tuple[List[float], float, List[float], List[str]]:
     """Compute a speed profile, curvature and limiting factor for *pts*.
 
@@ -454,12 +466,17 @@ def compute_speed_profile(
 
     for _ in range(curv_smoothing):
         R_s = R.copy()
-        for i in range(n):
-            if section[i] == "corner":
-                im1 = (i - 1) % n
-                ip1 = (i + 1) % n
-                if section[im1] == "corner" and section[ip1] == "corner":
-                    R_s[i] = 0.25 * R[im1] + 0.5 * R[i] + 0.25 * R[ip1]
+        if closed_loop:
+            for i in range(n):
+                if section[i] == "corner":
+                    im1 = (i - 1) % n
+                    ip1 = (i + 1) % n
+                    if section[im1] == "corner" and section[ip1] == "corner":
+                        R_s[i] = 0.25 * R[im1] + 0.5 * R[i] + 0.25 * R[ip1]
+        else:
+            for i in range(1, n - 1):
+                if section[i] == "corner" and section[i - 1] == "corner" and section[i + 1] == "corner":
+                    R_s[i] = 0.25 * R[i - 1] + 0.5 * R[i] + 0.25 * R[i + 1]
         R = R_s
 
     kappa = np.zeros(n)
@@ -561,17 +578,28 @@ def compute_speed_profile(
             if v_prev < v[i]:
                 v[i] = v_prev
                 limit_reason[i] = "braking" if limiter == "stoppie" else limiter
-        v_loop = min(v[0], v[-1])
-        v[0] = v[-1] = v_loop
+        if closed_loop:
+            v_loop = min(v[0], v[-1])
+            v[0] = v[-1] = v_loop
 
     # simple neighbour averaging to damp residual jitter
     for _ in range(speed_smoothing):
         v_smooth = v.copy()
-        for i in range(n):
-            v_smooth[i] = 0.25 * v[(i - 1) % n] + 0.5 * v[i] + 0.25 * v[(i + 1) % n]
-        v = v_smooth
-        v_loop = min(v[0], v[-1])
-        v[0] = v[-1] = v_loop
+        if closed_loop:
+            for i in range(n):
+                v_smooth[i] = 0.25 * v[(i - 1) % n] + 0.5 * v[i] + 0.25 * v[(i + 1) % n]
+            v = v_smooth
+            v_loop = min(v[0], v[-1])
+            v[0] = v[-1] = v_loop
+        else:
+            for i in range(n):
+                if i == 0:
+                    v_smooth[i] = 0.5 * v[i] + 0.5 * v[i + 1]
+                elif i == n - 1:
+                    v_smooth[i] = 0.5 * v[i] + 0.5 * v[i - 1]
+                else:
+                    v_smooth[i] = 0.25 * v[i - 1] + 0.5 * v[i] + 0.25 * v[i + 1]
+            v = v_smooth
 
     # recompute limiting factors for deceleration segments
     for i in range(1, n):
@@ -724,10 +752,33 @@ def main():
     parser.add_argument("--speed-smooth", type=int, default=3,
                         help="Neighbour-averaging passes for final speeds")
 
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--open",
+        dest="closed",
+        action="store_const",
+        const=False,
+        help="Force track to be treated as open",
+    )
+    group.add_argument(
+        "--closed",
+        dest="closed",
+        action="store_const",
+        const=True,
+        help="Force track to be treated as closed",
+    )
+    parser.set_defaults(closed=None)
+
     args = parser.parse_args()
 
     pts = load_csv(args.input)
-    pts = resample(pts, args.step)
+    if args.closed is None:
+        start = np.array([pts[0].x, pts[0].y])
+        end = np.array([pts[-1].x, pts[-1].y])
+        closed = np.allclose(start, end, atol=1e-6)
+    else:
+        closed = args.closed
+    pts = resample(pts, args.step, closed=closed)
     dists = cumulative_distance(pts)
 
     bp = BikeParams()
@@ -788,6 +839,7 @@ def main():
         kappa_dot_max=bp.kappa_dot_max,
         use_lean_angle_cap=bp.use_lean_angle_cap,
         use_steer_rate_cap=bp.use_steer_rate_cap,
+        closed_loop=closed,
     )
     gears: List[int] = []
     rpms: List[float] = []
