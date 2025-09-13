@@ -192,3 +192,37 @@ def test_nan_apex_fraction_midpoint(tmp_path: Path) -> None:
     assert apex_idx == expected_apex
     assert np.isclose(offset[expected_apex], e_inner)
 
+
+def test_curvature_radius_profile(tmp_path: Path) -> None:
+    """Curvature decreases radius to the apex and increases afterwards."""
+
+    track_csv = tmp_path / "corner.csv"
+    track_csv.write_text(
+        "\n".join(
+            [
+                "x_m,y_m,section_type,radius_m,width_m,camber_rad,grade_rad,apex_fraction,entry_length_m,exit_length_m",
+                "0,0,straight,inf,8,0,0,,0,0",
+                "0,50,corner,30,8,0,0,0.5,0,0",
+                "50,50,straight,inf,8,0,0,,0,0",
+            ]
+        )
+    )
+
+    geom = load_track_layout(track_csv, ds=1.0, closed=False)
+    s, _, kappa = build_clothoid_path(geom)
+
+    idx = np.flatnonzero(np.abs(geom.curvature) > 1e-9)
+    start_idx, end_idx = int(idx[0]), int(idx[-1])
+    apex_idx = start_idx + (end_idx - start_idx) // 2
+
+    before = np.abs(kappa[start_idx : apex_idx + 1])
+    after = np.abs(kappa[apex_idx : end_idx + 1])
+
+    # Radius decreases (curvature increases) towards the apex
+    assert np.all(np.diff(before) >= -1e-9)
+    # Radius increases (curvature decreases) past the apex
+    assert np.all(np.diff(after) <= 1e-9)
+    # Apex has the maximum curvature magnitude
+    assert before[-1] >= before[0]
+    assert after[0] >= after[-1]
+
