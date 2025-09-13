@@ -28,9 +28,11 @@ def test_clothoid_path_speed_profile(tmp_path: Path) -> None:
     )
 
     geom = load_track_layout(track_csv, ds=1.0, closed=False)
-    s, kappa = build_clothoid_path(geom)
+    offset, kappa = build_clothoid_path(geom)
     assert geom.apex_fraction is not None
     assert np.nanmax(geom.apex_fraction) == 0.5
+
+    s = np.arange(offset.size) * 1.0
 
     params = read_bike_params_csv(Path(__file__).resolve().parents[1] / "data" / "bike_params_r6.csv")
     v, ax, ay, limit, lap_time, iterations, elapsed_s = solve_speed_profile(

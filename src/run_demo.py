@@ -4,7 +4,7 @@ from __future__ import annotations
 
 Running ``python -m src.run_demo`` executes a simple workflow that
 parses a track layout, optimises a racing line and computes a feasible
-speed profile.  Results are written to time-stamped CSV files under the
+speed profile. Results are written to time-stamped CSV files under the
 ``outputs`` directory.
 
 Two CSV files are produced for each run:
@@ -15,6 +15,9 @@ Two CSV files are produced for each run:
 ``results.csv``
     Optimised path coordinates, speed profile and duplicated track edges
     for convenience.
+
+Pass ``--clothoid`` to generate a simple clothoid-based racing line without
+performing numerical optimisation.
 """
 
 from pathlib import Path
@@ -32,6 +35,7 @@ from .path_optim import optimise_lateral_offset
 from .path_param import path_curvature
 from .speed_solver import solve_speed_profile
 from .drivetrain_utils import engine_rpm, select_gear
+from .clothoid_path import build_clothoid_path
 
 
 def run(
@@ -50,6 +54,7 @@ def run(
     kappa_dot_max: float | None = None,
     use_lean_angle_cap: bool | None = None,
     use_steer_rate_cap: bool | None = None,
+    use_clothoid: bool = False,
     plot_caps: bool = False,
 ) -> tuple[float, Path]:
     """Execute the optimisation pipeline and return lap time and output directory.
@@ -70,6 +75,9 @@ def run(
     phi_max_deg, kappa_dot_max, use_lean_angle_cap, use_steer_rate_cap:
         Parameters governing optional lean angle and steer rate limits. Values
         provided via the CLI override defaults from the bike parameter file.
+    use_clothoid:
+        If ``True``, bypass path optimisation and construct a heuristic racing
+        line using :func:`clothoid_path.build_clothoid_path`.
     """
     start_time = time.perf_counter()
 
@@ -104,27 +112,30 @@ def run(
             bike_params.get("use_steer_rate_cap", kappa_dot_max is not None)
         )
 
-    # Path optimisation
-    s_control = np.linspace(s[0], s[-1], n_ctrl)
-    offset_spline, opt_iterations = optimise_lateral_offset(
-        s,
-        kappa_c,
-        left_edge,
-        right_edge,
-        s_control,
-        buffer=buffer,
-        max_iterations=max_iter,
-        path_tol=path_tol,
-        cost=cost,
-        mu=mu,
-        a_wheelie_max=a_wheelie_max,
-        a_brake=a_brake,
-        closed_loop=closed,
-        speed_max_iterations=speed_max_iter,
-        speed_tol=speed_tol,
-    )
-    offset = offset_spline(s)
-    kappa_path = path_curvature(s, offset_spline, kappa_c)
+    # Path generation
+    if use_clothoid:
+        offset, kappa_path = build_clothoid_path(geom)
+    else:
+        s_control = np.linspace(s[0], s[-1], n_ctrl)
+        offset_spline, opt_iterations = optimise_lateral_offset(
+            s,
+            kappa_c,
+            left_edge,
+            right_edge,
+            s_control,
+            buffer=buffer,
+            max_iterations=max_iter,
+            path_tol=path_tol,
+            cost=cost,
+            mu=mu,
+            a_wheelie_max=a_wheelie_max,
+            a_brake=a_brake,
+            closed_loop=closed,
+            speed_max_iterations=speed_max_iter,
+            speed_tol=speed_tol,
+        )
+        offset = offset_spline(s)
+        kappa_path = path_curvature(s, offset_spline, kappa_c)
     normal_x = -np.sin(psi)
     normal_y = np.cos(psi)
     x_path = x + offset * normal_x
@@ -255,11 +266,12 @@ def run(
         json.dump({"lap_time_s": lap_time}, f)
 
     total_runtime = time.perf_counter() - start_time
-    print(
-        f"Path optimisation: {opt_iterations} iterations, "
-        f"Speed solver: {speed_iterations} iterations, "
-        f"Total runtime: {total_runtime:.3f} s"
-    )
+    parts = []
+    if not use_clothoid:
+        parts.append(f"Path optimisation: {opt_iterations} iterations")
+    parts.append(f"Speed solver: {speed_iterations} iterations")
+    parts.append(f"Total runtime: {total_runtime:.3f} s")
+    print(", ".join(parts))
 
     return lap_time, out_dir
 
@@ -355,6 +367,11 @@ def main(argv: list[str] | None = None) -> None:
         action="store_true",
         help="Display speed cap diagnostic plot",
     )
+    parser.add_argument(
+        "--clothoid",
+        action="store_true",
+        help="Use heuristic clothoid path instead of optimising the racing line",
+    )
     args = parser.parse_args(argv)
 
     lap_time, out_dir = run(
@@ -373,6 +390,7 @@ def main(argv: list[str] | None = None) -> None:
         kappa_dot_max=args.kappa_dot_max,
         use_lean_angle_cap=args.use_lean_angle_cap,
         use_steer_rate_cap=args.use_steer_rate_cap,
+        use_clothoid=args.clothoid,
         plot_caps=args.plot_caps,
     )
     if not args.quiet_lap_time:

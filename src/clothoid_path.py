@@ -93,8 +93,8 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray]:
     Returns
     -------
     (numpy.ndarray, numpy.ndarray)
-        Arrays of arc length ``s`` and curvature ``kappa`` along the constructed
-        racing line.
+        Arrays of lateral offset ``e`` and curvature ``kappa`` along the
+        constructed racing line.
     """
 
     x = np.asarray(track.x, dtype=float)
@@ -112,9 +112,10 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray]:
 
     # If the track has no corners the racing line follows the centreline.
     if not corners:
-        spline = LateralOffsetSpline(s, np.zeros_like(s))
+        e = np.zeros_like(s)
+        spline = LateralOffsetSpline(s, e)
         kappa = path_curvature(s, spline, kappa_c)
-        return s, kappa
+        return e, kappa
 
     width = np.linalg.norm(track.left_edge - track.right_edge, axis=1)
     e = np.zeros(n)
@@ -158,7 +159,7 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray]:
 
     spline = LateralOffsetSpline(s, e)
     kappa = path_curvature(s, spline, kappa_c)
-    return s, kappa
+    return e, kappa
 
 
 # Provide an alias with a more descriptive name.
