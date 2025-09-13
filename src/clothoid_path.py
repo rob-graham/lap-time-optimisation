@@ -81,7 +81,7 @@ def _hermite_step(u: np.ndarray) -> np.ndarray:
     return 3.0 * u**2 - 2.0 * u**3
 
 
-def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray]:
+def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Construct a simple clothoid racing line for ``track``.
 
     Parameters
@@ -92,9 +92,9 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray]:
 
     Returns
     -------
-    (numpy.ndarray, numpy.ndarray)
-        Arrays of lateral offset ``e`` and curvature ``kappa`` along the
-        constructed racing line.
+    (numpy.ndarray, numpy.ndarray, numpy.ndarray)
+        Arrays of arc length ``s``, lateral offset ``e`` and curvature
+        ``kappa`` along the constructed racing line.
     """
 
     x = np.asarray(track.x, dtype=float)
@@ -115,7 +115,7 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray]:
         e = np.zeros_like(s)
         spline = LateralOffsetSpline(s, e)
         kappa = path_curvature(s, spline, kappa_c)
-        return e, kappa
+        return s, e, kappa
 
     width = np.linalg.norm(track.left_edge - track.right_edge, axis=1)
     e = np.zeros(n)
@@ -159,10 +159,10 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray]:
 
     spline = LateralOffsetSpline(s, e)
     kappa = path_curvature(s, spline, kappa_c)
-    return e, kappa
+    return s, e, kappa
 
 
 # Provide an alias with a more descriptive name.
-def build_racing_line(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray]:
+def build_racing_line(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     return build_clothoid_path(track)
 
