@@ -200,10 +200,10 @@ def test_curvature_radius_profile(tmp_path: Path) -> None:
     track_csv.write_text(
         "\n".join(
             [
-                "x_m,y_m,section_type,radius_m,width_m,camber_rad,grade_rad,apex_fraction,entry_length_m,exit_length_m",
-                "0,0,straight,inf,8,0,0,,0,0",
-                "0,50,corner,30,8,0,0,0.5,0,0",
-                "50,50,straight,inf,8,0,0,,0,0",
+                "x_m,y_m,section_type,radius_m,apex_radius_m,width_m,camber_rad,grade_rad,apex_fraction,entry_length_m,exit_length_m",
+                "0,0,straight,inf,inf,8,0,0,,0,0",
+                "0,50,corner,30,20,8,0,0,0.5,0,0",
+                "50,50,straight,inf,inf,8,0,0,,0,0",
             ]
         )
     )
@@ -218,10 +218,9 @@ def test_curvature_radius_profile(tmp_path: Path) -> None:
     before = np.abs(kappa[start_idx : apex_idx + 1])
     after = np.abs(kappa[apex_idx : end_idx + 1])
 
-    # Radius decreases (curvature increases) towards the apex
-    assert np.all(np.diff(before) >= -1e-9)
-    # Radius increases (curvature decreases) past the apex
-    assert np.all(np.diff(after) <= 1e-9)
+    # Curvature varies linearly towards and away from the apex
+    assert np.allclose(np.diff(before), before[1] - before[0])
+    assert np.allclose(np.diff(after), after[1] - after[0])
     # Apex has the maximum curvature magnitude
     assert before[-1] >= before[0]
     assert after[0] >= after[-1]
