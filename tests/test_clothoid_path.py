@@ -124,8 +124,8 @@ def test_entry_exit_lengths(tmp_path: Path) -> None:
     assert (s2[end_idx2] - s2[ce2]) < exit_len2
 
 
-def test_asymmetric_apex_fraction(tmp_path: Path) -> None:
-    """Apex fraction shifts the apex away from the midpoint."""
+def test_apex_fraction_shifts_apex(tmp_path: Path) -> None:
+    """Apex fraction moves the apex away from the midpoint."""
 
     track_csv = tmp_path / "asym.csv"
     track_csv.write_text(
@@ -133,7 +133,7 @@ def test_asymmetric_apex_fraction(tmp_path: Path) -> None:
             [
                 "x_m,y_m,section_type,radius_m,width_m,camber_rad,grade_rad,apex_fraction,entry_length_m,exit_length_m",
                 "0,0,straight,inf,8,0,0,,0,0",
-                "0,40,corner,30,8,0,0,0.25,0,0",
+                "0,40,corner,30,8,0,0,0.2,0,0",
                 "40,40,straight,inf,8,0,0,,0,0",
             ]
         )
@@ -149,7 +149,46 @@ def test_asymmetric_apex_fraction(tmp_path: Path) -> None:
     sign = float(np.sign(np.mean(geom.curvature[start_idx : end_idx + 1])))
     e_inner = sign * mean_width / 2.0
 
-    expected_apex = start_idx + int(0.25 * (end_idx - start_idx))
+    expected_apex = start_idx + int(0.2 * (end_idx - start_idx))
+    if e_inner > 0:
+        apex_idx = start_idx + int(np.argmax(offset[start_idx : end_idx + 1]))
+    else:
+        apex_idx = start_idx + int(np.argmin(offset[start_idx : end_idx + 1]))
+    assert apex_idx == expected_apex
     assert np.isclose(offset[expected_apex], e_inner)
-    assert expected_apex < (start_idx + end_idx) // 2
+
+
+def test_nan_apex_fraction_midpoint(tmp_path: Path) -> None:
+    """NaN apex fraction falls back to the midpoint."""
+
+    track_csv = tmp_path / "nan_apex.csv"
+    track_csv.write_text(
+        "\n".join(
+            [
+                "x_m,y_m,section_type,radius_m,width_m,camber_rad,grade_rad,apex_fraction,entry_length_m,exit_length_m",
+                "0,0,straight,inf,8,0,0,,0,0",
+                "0,40,corner,30,8,0,0,nan,0,0",
+                "40,40,straight,inf,8,0,0,,0,0",
+            ]
+        )
+    )
+
+    geom = load_track_layout(track_csv, ds=1.0, closed=False)
+    assert np.isnan(geom.apex_fraction).any()
+    s, offset, _ = build_clothoid_path(geom)
+
+    idx = np.flatnonzero(np.abs(geom.curvature) > 1e-9)
+    start_idx, end_idx = int(idx[0]), int(idx[-1])
+    width = np.linalg.norm(geom.left_edge - geom.right_edge, axis=1)
+    mean_width = float(np.mean(width[start_idx : end_idx + 1]))
+    sign = float(np.sign(np.mean(geom.curvature[start_idx : end_idx + 1])))
+    e_inner = sign * mean_width / 2.0
+
+    expected_apex = start_idx + int(0.5 * (end_idx - start_idx))
+    if e_inner > 0:
+        apex_idx = start_idx + int(np.argmax(offset[start_idx : end_idx + 1]))
+    else:
+        apex_idx = start_idx + int(np.argmin(offset[start_idx : end_idx + 1]))
+    assert apex_idx == expected_apex
+    assert np.isclose(offset[expected_apex], e_inner)
 
