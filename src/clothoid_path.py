@@ -131,6 +131,12 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, n
         else np.zeros(n)
     )
 
+    apex_fractions = (
+        np.asarray(track.apex_fraction, dtype=float)
+        if getattr(track, "apex_fraction", None) is not None
+        else np.full(n, np.nan)
+    )
+
     # Stay on the outer edge before the first corner.
     first = corners[0]
     e_outer_first = -first.sign * first.width / 2.0
@@ -164,19 +170,24 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, n
             e[:start_idx] = e_outer_first
 
         # Determine indices for entry, apex and exit.
-        mid = (start_idx + end_idx) // 2
+        apex_val = float(apex_fractions[c.start])
+        if not np.isfinite(apex_val):
+            apex_val = 0.5
+        apex_val = float(np.clip(apex_val, 0.0, 1.0))
+        apex_idx = start_idx + int(apex_val * (end_idx - start_idx))
+
         s_entry = s[start_idx]
-        s_apex = s[mid]
+        s_apex = s[apex_idx]
         s_exit = s[end_idx]
 
         # Entry spiral: outer -> inner.
-        seg1 = slice(start_idx, mid + 1)
+        seg1 = slice(start_idx, apex_idx + 1)
         u = (s[seg1] - s_entry) / max(s_apex - s_entry, 1e-9)
         h = _hermite_step(u)
         e[seg1] = e_outer + (e_inner - e_outer) * h
 
         # Exit spiral: inner -> outer.
-        seg2 = slice(mid, end_idx + 1)
+        seg2 = slice(apex_idx, end_idx + 1)
         u = (s[seg2] - s_apex) / max(s_exit - s_apex, 1e-9)
         h = _hermite_step(u)
         e[seg2] = e_inner + (e_outer - e_inner) * h
