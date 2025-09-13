@@ -46,6 +46,22 @@ approximating gradients. This value can be adjusted through the `fd_step`
 argument of `optimise_lateral_offset` if finer control over the optimisation is
 needed.
 
+### Clothoid racing line
+
+Passing `--clothoid` skips the numerical path optimisation and instead builds a
+simple racing line from cubic spirals (clothoids). This heuristic approach is
+much faster but may not produce the minimum‑time trajectory. The subsequent
+speed profile optimisation still runs on the generated path. This flag only
+affects the Method A pipeline in ``run_demo`` and has no effect on the Method B
+optimal control solver.
+
+```bash
+python -m src.run_demo --track data/track_layout.csv --bike data/bike_params_r6.csv --clothoid
+```
+
+The clothoid line relies only on the track geometry; it does not use the path
+optimisation parameters above.
+
 ### Lean-angle and steer-rate limits
 
 The speed solver can enforce physical limits on the bike dynamics. When a
@@ -70,9 +86,10 @@ steer caps even if values are present in the bike file.
 
 The track layout file follows the ``track_layout.csv`` format where each row
 describes the start of either a straight or constant-radius corner section. The
-columns ``x_m``, ``y_m``, ``section_type`` and ``radius_m`` define the geometry
-while ``width_m`` gives the track width used to compute the left and right
-edges.
+required columns ``x_m``, ``y_m``, ``section_type``, ``radius_m`` and ``width_m``
+define the basic geometry. Additional optional fields such as ``camber_rad``,
+``grade_rad``, ``apex_fraction``, ``entry_length_m`` and ``exit_length_m`` can be
+included and are used by some features like the clothoid racing line.
 
 Each run writes two CSV files in a time-stamped folder under ``outputs``:
 
