@@ -229,8 +229,19 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, n
 
         kappa[start_idx : apex_idx + 1] = sign * pre
         kappa[apex_idx : end_idx + 1] = sign * post
+    # Reparameterise by the true arc length of the offset path.
+    # The trajectory is defined relative to the centreline by a lateral offset
+    # ``e(s)``. The derivative of the path position with respect to the
+    # centreline arc length is ``(1 - e * kappa_c, e_s)`` in the Frenet frame.
+    # Its Euclidean norm gives the local scaling between centreline and path
+    # arc length.
+    e_s = spline.first_derivative(s)
+    scale = np.sqrt((1.0 - e * kappa_c) ** 2 + e_s**2)
+    s_true = np.zeros_like(s)
+    if len(s) > 1:
+        s_true[1:] = np.cumsum(0.5 * (scale[1:] + scale[:-1]) * np.diff(s))
 
-    return s, e, kappa
+    return s_true, e, kappa
 
 
 # Provide an alias with a more descriptive name.

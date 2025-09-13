@@ -29,6 +29,12 @@ def test_clothoid_path_speed_profile(tmp_path: Path) -> None:
 
     geom = load_track_layout(track_csv, ds=1.0, closed=False)
     s, offset, kappa = build_clothoid_path(geom)
+    # The returned ``s`` should reflect the arc length of the offset path and
+    # therefore differ from the centreline arc length.
+    s_center = np.zeros_like(geom.x)
+    s_center[1:] = np.cumsum(np.hypot(np.diff(geom.x), np.diff(geom.y)))
+    assert not np.isclose(s[-1], s_center[-1])
+
     assert geom.apex_fraction is not None
     assert np.nanmax(geom.apex_fraction) == 0.5
 
