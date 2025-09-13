@@ -10,6 +10,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 from speed_solver import solve_speed_profile
 from geometry import load_track_layout
 from io_utils import read_bike_params_csv
+from clothoid_path import build_clothoid_path, _find_corners
 
 
 def test_invalid_max_iterations_raises() -> None:
@@ -246,3 +247,26 @@ def test_steer_rate_ramp_matches_theory() -> None:
     assert mask.any()
     assert np.allclose(v[mask], expected[mask], atol=1e-6)
     assert np.all(limit[mask] == "steer")
+
+
+def test_speed_varies_with_curvature_when_steer_cap_nonrestrictive() -> None:
+    base_path = Path(__file__).resolve().parents[1]
+    geom = load_track_layout(base_path / "data" / "track_layout_clothoid.csv", ds=1.0, closed=False)
+    s, _, kappa = build_clothoid_path(geom)
+    params = read_bike_params_csv(base_path / "data" / "bike_params_r6.csv")
+    v, ax, ay, limit, _, _, _ = solve_speed_profile(
+        s,
+        kappa,
+        mu=params["mu"],
+        a_wheelie_max=params["a_wheelie_max"],
+        a_brake=params["a_brake"],
+        kappa_dot_max=100.0,
+        v_start=0.0,
+        v_end=0.0,
+    )
+    corners = _find_corners(kappa)
+    assert corners, "track should contain corners"
+    start, end = corners[0]
+    apex = start + int(np.argmax(np.abs(kappa[start : end + 1])))
+    assert np.mean(np.diff(v[start : apex + 1])) < 0
+    assert np.mean(np.diff(v[apex : end + 1])) > 0
