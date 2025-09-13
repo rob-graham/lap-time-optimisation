@@ -118,24 +118,24 @@ def solve_speed_profile(
         v_lean = np.sqrt(g * np.tan(phi_max_rad) / np.maximum(kappa_abs, 1e-6))
     else:
         v_lean = np.full_like(kappa, np.inf)
-
     if kappa_dot_max is not None and use_steer_rate_cap:
         dkappa_ds = np.gradient(kappa, s, edge_order=2)
         window = 5 if n >= 5 else 3 if n >= 3 else 1
         if window > 1:
             kernel = np.ones(window) / window
             dkappa_ds = np.convolve(dkappa_ds, kernel, mode="same")
-        v_steer = kappa_dot_max / np.maximum(np.abs(dkappa_ds), 1e-6)
+        v_steer_raw = kappa_dot_max / np.maximum(np.abs(dkappa_ds), 1e-6)
     else:
-        v_steer = np.full_like(kappa, np.inf)
+        dkappa_ds = None
+        v_steer_raw = np.full_like(kappa, np.inf)
 
-    caps = [(v_lat, "corner")]
+    caps_base = [(v_lat, "corner")]
     if use_lean_angle_cap and phi_max_deg is not None:
-        caps.append((v_lean, "lean"))
-    if use_steer_rate_cap and kappa_dot_max is not None:
-        caps.append((v_steer, "steer"))
+        caps_base.append((v_lean, "lean"))
 
-    def apply_caps(v_array: np.ndarray, limit_arr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def apply_caps(
+        v_array: np.ndarray, limit_arr: np.ndarray, caps: list[tuple[np.ndarray, str]]
+    ) -> tuple[np.ndarray, np.ndarray]:
         for cap, name in caps:
             v_before = v_array.copy()
             v_array = np.minimum(v_array, cap)
@@ -174,8 +174,18 @@ def solve_speed_profile(
             if v_end is not None:
                 v[-1] = float(v_end)
 
+        if use_steer_rate_cap and kappa_dot_max is not None:
+            kappa_dot_est = np.abs(v * dkappa_ds)
+            v_steer = np.where(
+                kappa_dot_est > kappa_dot_max, v_steer_raw, v_lat
+            )
+            caps = caps_base + [(v_steer, "steer")]
+        else:
+            v_steer = np.full_like(v, np.inf)
+            caps = caps_base
+
         # Enforce all active caps before the passes
-        v, limit_forward = apply_caps(v, limit_forward)
+        v, limit_forward = apply_caps(v, limit_forward, caps)
 
         v_prev = v.copy()
         ay = v**2 * kappa
@@ -214,7 +224,7 @@ def solve_speed_profile(
             v[-1] = float(v_end)
 
         # Enforce caps again after forward pass
-        v, limit_forward = apply_caps(v, limit_forward)
+        v, limit_forward = apply_caps(v, limit_forward, caps)
 
         # Backward pass (braking)
         for i in range(n - 1, 0, -1):
@@ -245,7 +255,7 @@ def solve_speed_profile(
                 limit_backward[i - 1] = limit_type
 
         # Enforce caps after backward pass
-        v, limit_backward = apply_caps(v, limit_backward)
+        v, limit_backward = apply_caps(v, limit_backward, caps)
 
         if closed_loop:
             v_edge = 0.5 * (v[0] + v[-1])
@@ -277,7 +287,8 @@ def solve_speed_profile(
         lean_mask = np.isclose(v, v_lean, rtol=1e-3, atol=1e-2)
         limit[lean_mask] = "lean"
     if use_steer_rate_cap and kappa_dot_max is not None:
-        steer_mask = np.isclose(v, v_steer, rtol=1e-3, atol=1e-2)
+        kappa_dot_est = np.abs(v * dkappa_ds)
+        steer_mask = np.isclose(kappa_dot_est, kappa_dot_max, rtol=1e-3, atol=1e-2)
         limit[steer_mask] = "steer"
 
     # Fill any remaining unspecified entries based on acceleration sign
