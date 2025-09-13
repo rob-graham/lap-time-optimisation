@@ -120,42 +120,73 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, n
     width = np.linalg.norm(track.left_edge - track.right_edge, axis=1)
     e = np.zeros(n)
 
+    entry_lengths = (
+        np.asarray(track.entry_length, dtype=float)
+        if getattr(track, "entry_length", None) is not None
+        else np.zeros(n)
+    )
+    exit_lengths = (
+        np.asarray(track.exit_length, dtype=float)
+        if getattr(track, "exit_length", None) is not None
+        else np.zeros(n)
+    )
+
     # Stay on the outer edge before the first corner.
     first = corners[0]
     e_outer_first = -first.sign * first.width / 2.0
-    e[: first.start] = e_outer_first
+
+    prev_exit = 0
 
     for i, c in enumerate(corners):
         e_outer = -c.sign * c.width / 2.0
         e_inner = c.sign * c.width / 2.0
 
+        # Determine indices for entry and exit taking into account the
+        # requested lengths and track bounds.
+        entry_len = float(entry_lengths[c.start])
+        exit_len = float(exit_lengths[c.end])
+
+        s_entry_target = s[c.start] - entry_len
+        start_idx = int(np.searchsorted(s, s_entry_target, side="left"))
+        start_idx = max(start_idx, prev_exit)
+        start_idx = min(start_idx, c.start)
+
+        next_start = corners[i + 1].start if i < len(corners) - 1 else n - 1
+        s_exit_target = s[c.end] + exit_len
+        end_idx = int(np.searchsorted(s, s_exit_target, side="right") - 1)
+        end_idx = min(end_idx, next_start)
+        end_idx = max(end_idx, c.end)
+
         # Fill preceding straight with the correct outer offset.
-        if i > 0:
-            prev_end = corners[i - 1].end
-            e[prev_end + 1 : c.start] = e_outer
+        if start_idx > prev_exit:
+            e[prev_exit:start_idx] = e_outer
+        elif prev_exit == 0 and i == 0:
+            e[:start_idx] = e_outer_first
 
         # Determine indices for entry, apex and exit.
-        mid = (c.start + c.end) // 2
-        s_entry = s[c.start]
+        mid = (start_idx + end_idx) // 2
+        s_entry = s[start_idx]
         s_apex = s[mid]
-        s_exit = s[c.end]
+        s_exit = s[end_idx]
 
         # Entry spiral: outer -> inner.
-        seg1 = slice(c.start, mid + 1)
+        seg1 = slice(start_idx, mid + 1)
         u = (s[seg1] - s_entry) / max(s_apex - s_entry, 1e-9)
         h = _hermite_step(u)
         e[seg1] = e_outer + (e_inner - e_outer) * h
 
         # Exit spiral: inner -> outer.
-        seg2 = slice(mid, c.end + 1)
+        seg2 = slice(mid, end_idx + 1)
         u = (s[seg2] - s_apex) / max(s_exit - s_apex, 1e-9)
         h = _hermite_step(u)
         e[seg2] = e_inner + (e_outer - e_inner) * h
 
+        prev_exit = end_idx + 1
+
     # After the last corner remain on the outer edge of the first corner to
     # ensure continuity for closed tracks.
-    last_end = corners[-1].end
-    e[last_end + 1 :] = e_outer_first
+    if prev_exit < n:
+        e[prev_exit:] = e_outer_first
 
     spline = LateralOffsetSpline(s, e)
     kappa = path_curvature(s, spline, kappa_c)
