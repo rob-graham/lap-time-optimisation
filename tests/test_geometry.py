@@ -116,3 +116,52 @@ def test_load_track_layout_missing_columns(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="width_m"):
         load_track_layout(str(track_file), ds=1.0)
+
+
+def test_optional_corner_metadata(tmp_path: Path) -> None:
+    data = [
+        {"x_m": 0.0, "y_m": 0.0, "section_type": "straight", "radius_m": 0.0, "width_m": 8.0},
+        {
+            "x_m": 10.0,
+            "y_m": 0.0,
+            "section_type": "corner",
+            "radius_m": 10.0,
+            "width_m": 8.0,
+            "apex_fraction": 0.3,
+        },
+        {"x_m": 10.0, "y_m": 10.0, "section_type": "straight", "radius_m": 0.0, "width_m": 8.0},
+    ]
+    df = pd.DataFrame(data)
+    track_file = tmp_path / "apex.csv"
+    df.to_csv(track_file, index=False)
+    geom = load_track_layout(track_file, ds=1.0, closed=False)
+
+    mask = np.isfinite(geom.apex_fraction)
+    assert mask.any()
+    assert np.allclose(geom.apex_fraction[mask], 0.3)
+    assert np.allclose(geom.entry_length[mask], 0.0)
+    assert np.allclose(geom.exit_length[mask], 0.0)
+
+    data2 = [
+        {"x_m": 0.0, "y_m": 0.0, "section_type": "straight", "radius_m": 0.0, "width_m": 8.0},
+        {
+            "x_m": 10.0,
+            "y_m": 0.0,
+            "section_type": "corner",
+            "radius_m": 10.0,
+            "width_m": 8.0,
+            "entry_length_m": 2.0,
+            "exit_length_m": 3.0,
+        },
+        {"x_m": 10.0, "y_m": 10.0, "section_type": "straight", "radius_m": 0.0, "width_m": 8.0},
+    ]
+    df2 = pd.DataFrame(data2)
+    track_file2 = tmp_path / "entry_exit.csv"
+    df2.to_csv(track_file2, index=False)
+    geom2 = load_track_layout(track_file2, ds=1.0, closed=False)
+
+    mask2 = np.isfinite(geom2.apex_fraction)
+    assert mask2.any()
+    assert np.allclose(geom2.apex_fraction[mask2], 0.5)
+    assert np.allclose(geom2.entry_length[mask2], 2.0)
+    assert np.allclose(geom2.exit_length[mask2], 3.0)

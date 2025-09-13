@@ -38,6 +38,9 @@ class TrackGeometry:
     curvature: np.ndarray
     left_edge: np.ndarray
     right_edge: np.ndarray
+    apex_fraction: np.ndarray | None = None
+    entry_length: np.ndarray | None = None
+    exit_length: np.ndarray | None = None
 
 
 def load_track(file_path: str, ds: float, closed: bool = True) -> TrackGeometry:
@@ -149,6 +152,9 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
     y_nodes = df["y_m"].to_numpy(float)
     width_nodes = df["width_m"].to_numpy(float)
     radius_nodes = df.get("radius_m", pd.Series(0.0, index=df.index)).to_numpy(float)
+    apex_frac_nodes = df.get("apex_fraction", pd.Series(np.nan, index=df.index)).to_numpy(float)
+    entry_len_nodes = df.get("entry_length_m", pd.Series(0.0, index=df.index)).to_numpy(float)
+    exit_len_nodes = df.get("exit_length_m", pd.Series(0.0, index=df.index)).to_numpy(float)
     section_types = df["section_type"].astype(str).to_numpy()
 
     x_list: list[np.ndarray] = []
@@ -156,6 +162,9 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
     heading_list: list[np.ndarray] = []
     curvature_list: list[np.ndarray] = []
     width_list: list[np.ndarray] = []
+    apex_frac_list: list[np.ndarray] = []
+    entry_len_list: list[np.ndarray] = []
+    exit_len_list: list[np.ndarray] = []
 
     n = len(df)
     n_segments = n if closed else n - 1
@@ -182,6 +191,9 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
             heading_seg = np.full_like(x_seg, np.arctan2(dy, dx))
             curvature_seg = np.zeros_like(x_seg)
             width_seg = w0 + ratio * (w1 - w0)
+            apex_seg = np.full_like(x_seg, np.nan)
+            entry_seg = np.zeros_like(x_seg)
+            exit_seg = np.zeros_like(x_seg)
         elif seg_type == "corner":
             r = radius_nodes[i]
             if r == 0:
@@ -206,6 +218,14 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
             heading_seg = phi + np.sign(r) * (np.pi / 2.0)
             curvature_seg = np.full_like(x_seg, 1.0 / r)
             width_seg = w0 + (w1 - w0) * (s_local / seg_len)
+            apex_val = apex_frac_nodes[i]
+            if np.isnan(apex_val):
+                apex_val = 0.5
+            apex_seg = np.full_like(x_seg, apex_val)
+            entry_val = entry_len_nodes[i]
+            exit_val = exit_len_nodes[i]
+            entry_seg = np.full_like(x_seg, entry_val)
+            exit_seg = np.full_like(x_seg, exit_val)
         else:
             raise ValueError(f"unknown section_type '{section_types[i]}'")
 
@@ -214,12 +234,18 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
         heading_list.append(heading_seg)
         curvature_list.append(curvature_seg)
         width_list.append(width_seg)
+        apex_frac_list.append(apex_seg)
+        entry_len_list.append(entry_seg)
+        exit_len_list.append(exit_seg)
 
     x = np.concatenate(x_list)
     y = np.concatenate(y_list)
     heading = np.concatenate(heading_list)
     curvature = np.concatenate(curvature_list)
     width = np.concatenate(width_list)
+    apex_fraction = np.concatenate(apex_frac_list)
+    entry_length = np.concatenate(entry_len_list)
+    exit_length = np.concatenate(exit_len_list)
 
     half_width = 0.5 * width
     normal_x = -np.sin(heading)
@@ -227,4 +253,14 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
     left_edge = np.column_stack((x + half_width * normal_x, y + half_width * normal_y))
     right_edge = np.column_stack((x - half_width * normal_x, y - half_width * normal_y))
 
-    return TrackGeometry(x, y, heading, curvature, left_edge, right_edge)
+    return TrackGeometry(
+        x,
+        y,
+        heading,
+        curvature,
+        left_edge,
+        right_edge,
+        apex_fraction,
+        entry_length,
+        exit_length,
+    )
