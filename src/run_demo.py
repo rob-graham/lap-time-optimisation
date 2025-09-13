@@ -114,7 +114,7 @@ def run(
 
     # Path generation
     if use_clothoid:
-        offset, kappa_path = build_clothoid_path(geom)
+        s, offset, kappa_path = build_clothoid_path(geom)
     else:
         s_control = np.linspace(s[0], s[-1], n_ctrl)
         offset_spline, opt_iterations = optimise_lateral_offset(
