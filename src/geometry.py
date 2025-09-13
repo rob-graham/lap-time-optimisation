@@ -41,6 +41,7 @@ class TrackGeometry:
     apex_fraction: np.ndarray | None = None
     entry_length: np.ndarray | None = None
     exit_length: np.ndarray | None = None
+    apex_radius: np.ndarray | None = None
 
 
 def load_track(file_path: str, ds: float, closed: bool = True) -> TrackGeometry:
@@ -126,7 +127,8 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
         Location of the CSV file describing the track layout.  Each row marks
         the beginning of a segment.  The ``section_type`` column selects either
         ``"straight"`` or ``"corner"`` and ``radius_m`` gives the signed corner
-        radius.
+        radius.  Optional ``apex_radius_m`` specifies the desired radius at the
+        apex for use by the clothoid path generator.
     ds:
         Desired arc-length spacing for discretisation.
     closed:
@@ -152,6 +154,9 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
     y_nodes = df["y_m"].to_numpy(float)
     width_nodes = df["width_m"].to_numpy(float)
     radius_nodes = df.get("radius_m", pd.Series(0.0, index=df.index)).to_numpy(float)
+    apex_radius_nodes = df.get(
+        "apex_radius_m", pd.Series(np.nan, index=df.index)
+    ).to_numpy(float)
     apex_frac_nodes = df.get("apex_fraction", pd.Series(np.nan, index=df.index)).to_numpy(float)
     entry_len_nodes = df.get("entry_length_m", pd.Series(0.0, index=df.index)).to_numpy(float)
     exit_len_nodes = df.get("exit_length_m", pd.Series(0.0, index=df.index)).to_numpy(float)
@@ -165,6 +170,7 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
     apex_frac_list: list[np.ndarray] = []
     entry_len_list: list[np.ndarray] = []
     exit_len_list: list[np.ndarray] = []
+    apex_radius_list: list[np.ndarray] = []
 
     n = len(df)
     n_segments = n if closed else n - 1
@@ -194,6 +200,7 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
             apex_seg = np.full_like(x_seg, np.nan)
             entry_seg = np.zeros_like(x_seg)
             exit_seg = np.zeros_like(x_seg)
+            apex_r_seg = np.full_like(x_seg, np.nan)
         elif seg_type == "corner":
             r = radius_nodes[i]
             if r == 0:
@@ -226,6 +233,7 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
             exit_val = exit_len_nodes[i]
             entry_seg = np.full_like(x_seg, entry_val)
             exit_seg = np.full_like(x_seg, exit_val)
+            apex_r_seg = np.full_like(x_seg, apex_radius_nodes[i])
         else:
             raise ValueError(f"unknown section_type '{section_types[i]}'")
 
@@ -237,6 +245,7 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
         apex_frac_list.append(apex_seg)
         entry_len_list.append(entry_seg)
         exit_len_list.append(exit_seg)
+        apex_radius_list.append(apex_r_seg)
 
     x = np.concatenate(x_list)
     y = np.concatenate(y_list)
@@ -246,6 +255,7 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
     apex_fraction = np.concatenate(apex_frac_list)
     entry_length = np.concatenate(entry_len_list)
     exit_length = np.concatenate(exit_len_list)
+    apex_radius = np.concatenate(apex_radius_list)
 
     half_width = 0.5 * width
     normal_x = -np.sin(heading)
@@ -263,4 +273,5 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
         apex_fraction,
         entry_length,
         exit_length,
+        apex_radius,
     )

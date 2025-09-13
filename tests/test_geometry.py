@@ -141,6 +141,8 @@ def test_optional_corner_metadata(tmp_path: Path) -> None:
     assert np.allclose(geom.apex_fraction[mask], 0.3)
     assert np.allclose(geom.entry_length[mask], 0.0)
     assert np.allclose(geom.exit_length[mask], 0.0)
+    assert geom.apex_radius is not None
+    assert np.isnan(geom.apex_radius).all()
 
     data2 = [
         {"x_m": 0.0, "y_m": 0.0, "section_type": "straight", "radius_m": 0.0, "width_m": 8.0},
@@ -165,3 +167,26 @@ def test_optional_corner_metadata(tmp_path: Path) -> None:
     assert np.allclose(geom2.apex_fraction[mask2], 0.5)
     assert np.allclose(geom2.entry_length[mask2], 2.0)
     assert np.allclose(geom2.exit_length[mask2], 3.0)
+    assert geom2.apex_radius is not None
+    assert np.isnan(geom2.apex_radius).all()
+
+    data3 = [
+        {"x_m": 0.0, "y_m": 0.0, "section_type": "straight", "radius_m": 0.0, "apex_radius_m": np.nan, "width_m": 8.0},
+        {
+            "x_m": 10.0,
+            "y_m": 0.0,
+            "section_type": "corner",
+            "radius_m": 10.0,
+            "apex_radius_m": 5.0,
+            "width_m": 8.0,
+        },
+        {"x_m": 10.0, "y_m": 10.0, "section_type": "straight", "radius_m": 0.0, "apex_radius_m": np.nan, "width_m": 8.0},
+    ]
+    df3 = pd.DataFrame(data3)
+    track_file3 = tmp_path / "apex_radius.csv"
+    df3.to_csv(track_file3, index=False)
+    geom3 = load_track_layout(track_file3, ds=1.0, closed=False)
+    assert geom3.apex_radius is not None
+    mask3 = np.isfinite(geom3.apex_radius)
+    assert mask3.any()
+    assert np.allclose(geom3.apex_radius[mask3], 5.0)

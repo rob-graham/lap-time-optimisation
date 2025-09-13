@@ -137,6 +137,12 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, n
         else np.full(n, np.nan)
     )
 
+    apex_radii = (
+        np.asarray(track.apex_radius, dtype=float)
+        if getattr(track, "apex_radius", None) is not None
+        else np.full(n, np.nan)
+    )
+
     # Stay on the outer edge before the first corner.
     first = corners[0]
     e_outer_first = -first.sign * first.width / 2.0
@@ -207,22 +213,19 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, n
     spline = LateralOffsetSpline(s, e)
     kappa = path_curvature(s, spline, kappa_c)
 
-    # Enforce decreasing radius (increasing curvature magnitude) towards
-    # the apex and increasing radius past the apex for each corner.
+    # Shape curvature using piecewise linear profiles for each corner.
     for start_idx, apex_idx, end_idx, sign in corner_sections:
-        seg = np.abs(kappa[start_idx : end_idx + 1])
-        pre = seg[: apex_idx - start_idx + 1]
-        post = seg[apex_idx - start_idx :]
+        start_abs = abs(kappa[start_idx])
+        end_abs = abs(kappa[end_idx])
+        apex_radius = float(apex_radii[start_idx])
+        if np.isfinite(apex_radius) and apex_radius > 0:
+            apex_abs = 1.0 / apex_radius
+        else:
+            apex_abs = abs(kappa[apex_idx])
+        apex_abs = max(apex_abs, start_abs, end_abs)
 
-        # Monotonic increase towards the apex
-        pre = np.maximum.accumulate(pre)
-        # Monotonic decrease away from the apex
-        post = np.maximum.accumulate(post[::-1])[::-1]
-
-        # Ensure curvature at the apex is the maximum value
-        apex_val = max(pre[-1], post[0])
-        pre[-1] = apex_val
-        post[0] = apex_val
+        pre = np.linspace(start_abs, apex_abs, apex_idx - start_idx + 1)
+        post = np.linspace(apex_abs, end_abs, end_idx - apex_idx + 1)
 
         kappa[start_idx : apex_idx + 1] = sign * pre
         kappa[apex_idx : end_idx + 1] = sign * post
