@@ -100,3 +100,21 @@ def test_run_raises_without_gears(tmp_path) -> None:
             speed_tol=1e-2,
             path_tol=1e-2,
         )
+
+
+def test_clothoid_path_has_curvature() -> None:
+    lap_time, out_dir = run(
+        "data/track_layout.csv",
+        "data/bike_params_sv650.csv",
+        ds=1.0,
+        buffer=0.5,
+        n_ctrl=20,
+        closed=True,
+        speed_tol=1e-2,
+        use_clothoid=True,
+    )
+
+    assert np.isfinite(lap_time) and lap_time > 0
+    results = pd.read_csv(out_dir / "results.csv")
+    assert "curvature_1pm" in results.columns
+
