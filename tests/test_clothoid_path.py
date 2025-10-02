@@ -6,7 +6,7 @@ import numpy as np
 # Ensure ``src`` directory is on the import path for the tests
 sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 
-from geometry import load_track_layout
+from geometry import TrackGeometry, load_track_layout
 from clothoid_path import build_clothoid_path, _corner_data
 from io_utils import read_bike_params_csv
 from speed_solver import solve_speed_profile
@@ -202,9 +202,42 @@ def test_nan_apex_fraction_midpoint(tmp_path: Path) -> None:
 def test_right_left_right_corners_split_and_hit_apexes() -> None:
     """Alternating corners are detected separately and reach their apices."""
 
-    root = Path(__file__).resolve().parents[1]
-    geom = load_track_layout(
-        str(root / "data" / "track_layout_clothoid.csv"), ds=2.0, closed=True
+    n = 200
+    x = np.linspace(0.0, 199.0, n)
+    y = np.zeros(n)
+    heading = np.zeros(n)
+    curvature = np.zeros(n)
+
+    width = 10.0
+    left_edge = np.column_stack((x, np.full(n, width / 2.0)))
+    right_edge = np.column_stack((x, np.full(n, -width / 2.0)))
+
+    apex_fraction = np.full(n, 0.5)
+    entry_length = np.zeros(n)
+    exit_length = np.zeros(n)
+
+    segments = [
+        (40, 60, -0.02),
+        (80, 100, 0.02),
+        (120, 140, -0.02),
+    ]
+
+    for start, end, kappa in segments:
+        curvature[start : end + 1] = kappa
+        entry_length[start] = 8.0
+        exit_length[end] = 8.0
+
+    geom = TrackGeometry(
+        x=x,
+        y=y,
+        heading=heading,
+        curvature=curvature,
+        left_edge=left_edge,
+        right_edge=right_edge,
+        apex_fraction=apex_fraction,
+        entry_length=entry_length,
+        exit_length=exit_length,
+        apex_radius=None,
     )
 
     corners = _corner_data(geom)
@@ -232,6 +265,8 @@ def test_right_left_right_corners_split_and_hit_apexes() -> None:
     apex_frac = np.asarray(geom.apex_fraction, dtype=float)
 
     prev_exit = 0
+    outer_offsets = []
+    corner_ranges = []
     for idx, corner in enumerate(corners):
         entry_len = float(entry[corner.start])
         exit_len = float(exit[corner.end])
@@ -262,7 +297,29 @@ def test_right_left_right_corners_split_and_hit_apexes() -> None:
         apex_idx = start_idx + int(apex_val * (end_idx - start_idx))
         assert start_idx <= apex_idx <= end_idx
 
+        outer_offsets.append(-corner.sign * corner.width / 2.0)
+        corner_ranges.append((start_idx, end_idx))
         prev_exit = end_idx + 1
+
+    # Offsets between alternating corners should blend smoothly instead of
+    # jumping when the outer edge changes side.
+    assert len(corner_ranges) == len(outer_offsets) == len(corners)
+    for idx in range(esse_start, esse_start + 2):
+        start_idx, end_idx = corner_ranges[idx]
+        next_start_idx, _ = corner_ranges[idx + 1]
+        if next_start_idx <= end_idx + 1:
+            continue
+        straight = offset[end_idx + 1 : next_start_idx + 1]
+        prev_outer = outer_offsets[idx]
+        next_outer = outer_offsets[idx + 1]
+        assert np.isclose(straight[0], prev_outer, atol=1e-6)
+        assert np.isclose(straight[-1], next_outer, atol=1e-6)
+        if not np.isclose(prev_outer, next_outer, atol=1e-6):
+            # Ensure the offset actually transitions between the two outer edges
+            # with a smooth, monotonic variation.
+            diffs = np.diff(straight)
+            assert np.any(np.abs(diffs) > 1e-6)
+            assert np.all(diffs >= -1e-6) or np.all(diffs <= 1e-6)
 
 
 def test_curvature_radius_profile(tmp_path: Path) -> None:
