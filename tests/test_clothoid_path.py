@@ -130,6 +130,55 @@ def test_entry_exit_lengths(tmp_path: Path) -> None:
     assert (s2[end_idx2] - s2[ce2]) < exit_len2
 
 
+def test_alternating_corners_respect_offsets(tmp_path: Path) -> None:
+    """Alternating corners blend defaults but honour explicit offsets."""
+
+    header = (
+        "x_m,y_m,section_type,radius_m,width_m,camber_rad,grade_rad,"
+        "apex_fraction,entry_length_m,exit_length_m,entry_offset_m,exit_offset_m"
+    )
+
+    esse_rows = [
+        header,
+        "0,0,straight,inf,8,0,0,,0,0,,",
+        "0,40,corner,25,8,0,0,,0,0,,",
+        "30,70,corner,-25,8,0,0,,0,0,,",
+        "60,40,straight,inf,8,0,0,,0,0,,",
+        "60,0,straight,inf,8,0,0,,0,0,,",
+    ]
+
+    track_csv = tmp_path / "esse.csv"
+    track_csv.write_text("\n".join(esse_rows))
+
+    geom = load_track_layout(track_csv, ds=1.0, closed=False)
+    s, offset, _ = build_clothoid_path(geom)
+    corners = _corner_data(geom)
+    assert len(corners) >= 2
+    first, second = corners[0], corners[1]
+
+    # Default offsets blended to centre for alternating corners.
+    assert np.isclose(offset[first.end], 0.0, atol=1e-6)
+    assert np.isclose(offset[second.start], 0.0, atol=1e-6)
+
+    # Explicit offsets should be respected.
+    esse_rows_explicit = [
+        header,
+        "0,0,straight,inf,8,0,0,,0,0,,",
+        "0,40,corner,25,8,0,0,,0,0,-3,-3",
+        "30,70,corner,-25,8,0,0,,0,0,3,3",
+        "60,40,straight,inf,8,0,0,,0,0,,",
+        "60,0,straight,inf,8,0,0,,0,0,,",
+    ]
+
+    track_csv.write_text("\n".join(esse_rows_explicit))
+    geom2 = load_track_layout(track_csv, ds=1.0, closed=False)
+    _, offset2, _ = build_clothoid_path(geom2)
+    corners2 = _corner_data(geom2)
+    first2, second2 = corners2[0], corners2[1]
+
+    assert np.isclose(offset2[first2.end], -3.0, atol=1e-6)
+    assert np.isclose(offset2[second2.start], 3.0, atol=1e-6)
+
 def test_apex_fraction_shifts_apex(tmp_path: Path) -> None:
     """Apex fraction moves the apex away from the midpoint."""
 

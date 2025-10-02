@@ -55,17 +55,44 @@ def _find_corners(curvature: np.ndarray, tol: float = 1e-9) -> List[Tuple[int, i
     start = idx[0]
     prev = idx[0]
     prev_sign = 1.0 if curvature[start] > 0 else -1.0
+    sign_tol = max(tol * 1000.0, 1e-6)
     for i in idx[1:]:
         sign = 1.0 if curvature[i] > 0 else -1.0
-        if i == prev + 1 and sign == prev_sign:
-            prev = i
-            continue
+        if i == prev + 1:
+            if sign != prev_sign and (
+                abs(curvature[i]) <= sign_tol and abs(curvature[prev]) <= sign_tol
+            ):
+                sign = prev_sign
+            if sign == prev_sign:
+                prev = i
+                continue
         segments.append((start, prev))
         start = i
         prev = i
         prev_sign = sign
     segments.append((start, prev))
-    return segments
+    if not segments:
+        return segments
+
+    filtered: List[Tuple[int, int]] = []
+    buffer_start: int | None = None
+    buffer_end: int | None = None
+    for seg_start, seg_end in segments:
+        seg_max = float(np.max(np.abs(curvature[seg_start : seg_end + 1])))
+        seg_len = seg_end - seg_start + 1
+        if seg_len <= 1 or seg_max <= sign_tol:
+            if buffer_start is None:
+                buffer_start = seg_start
+            buffer_end = seg_end
+            continue
+        if buffer_start is not None:
+            seg_start = buffer_start
+            buffer_start = None
+        filtered.append((seg_start, seg_end))
+        buffer_end = None
+    if buffer_start is not None and buffer_end is not None:
+        filtered.append((buffer_start, buffer_end))
+    return filtered
 
 
 def _corner_data(track: TrackGeometry) -> List[Corner]:
@@ -151,17 +178,69 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, n
         else np.full(n, np.nan)
     )
 
+    entry_offsets = (
+        np.asarray(track.entry_offset, dtype=float)
+        if getattr(track, "entry_offset", None) is not None
+        else np.full(n, np.nan)
+    )
+    exit_offsets = (
+        np.asarray(track.exit_offset, dtype=float)
+        if getattr(track, "exit_offset", None) is not None
+        else np.full(n, np.nan)
+    )
+    entry_defined = (
+        np.asarray(track.entry_offset_defined, dtype=bool)
+        if getattr(track, "entry_offset_defined", None) is not None
+        else np.zeros(n, dtype=bool)
+    )
+    exit_defined = (
+        np.asarray(track.exit_offset_defined, dtype=bool)
+        if getattr(track, "exit_offset_defined", None) is not None
+        else np.zeros(n, dtype=bool)
+    )
+
     # Stay on the outer edge before the first corner.
     first = corners[0]
-    e_outer_first = -first.sign * first.width / 2.0
+    corner_offsets: List[dict[str, object]] = []
+    for c in corners:
+        default_outer = -c.sign * c.width / 2.0
+        entry_val = float(entry_offsets[c.start]) if np.isfinite(entry_offsets[c.start]) else default_outer
+        exit_val = float(exit_offsets[c.end]) if np.isfinite(exit_offsets[c.end]) else default_outer
+        corner_offsets.append(
+            {
+                "entry": entry_val,
+                "exit": exit_val,
+                "entry_explicit": bool(entry_defined[c.start] and np.isfinite(entry_offsets[c.start])),
+                "exit_explicit": bool(exit_defined[c.end] and np.isfinite(exit_offsets[c.end])),
+            }
+        )
+
+    for i in range(len(corners) - 1):
+        curr = corners[i]
+        nxt = corners[i + 1]
+        if curr.sign == nxt.sign:
+            continue
+        if nxt.start > curr.end + 1:
+            continue
+        gap = curr.end - nxt.start + 1
+        blend_to_zero = gap >= 0
+        if blend_to_zero:
+            if not corner_offsets[i]["exit_explicit"]:
+                corner_offsets[i]["exit"] = 0.0
+            if not corner_offsets[i + 1]["entry_explicit"]:
+                corner_offsets[i + 1]["entry"] = 0.0
+
+    e_outer_first = float(corner_offsets[0]["entry"])
 
     prev_exit = 0
-    prev_outer_offset = e_outer_first
+    prev_offset = e_outer_first
     # Record corner index ranges for post processing of curvature
     corner_sections: List[Tuple[int, int, int, float]] = []
 
     for i, c in enumerate(corners):
-        e_outer = -c.sign * c.width / 2.0
+        offsets = corner_offsets[i]
+        entry_outer = float(offsets["entry"])
+        exit_outer = float(offsets["exit"])
         e_inner = c.sign * c.width / 2.0
 
         # Determine indices for entry and exit taking into account the
@@ -191,7 +270,7 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, n
                 span = max(s_end - s_start, 1e-9)
                 u = (s[seg] - s_start) / span
                 h = _hermite_step(u)
-                e[seg] = prev_outer_offset + (e_outer - prev_outer_offset) * h
+                e[seg] = prev_offset + (entry_outer - prev_offset) * h
             start_idx = prev_exit
         else:
             start_idx = max(start_idx_raw, prev_exit)
@@ -204,7 +283,7 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, n
             span = max(s_end - s_start, 1e-9)
             u = (s[seg] - s_start) / span
             h = _hermite_step(u)
-            e[seg] = prev_outer_offset + (e_outer - prev_outer_offset) * h
+            e[seg] = prev_offset + (entry_outer - prev_offset) * h
         elif prev_exit == 0 and i == 0:
             e[:start_idx] = e_outer_first
 
@@ -225,19 +304,19 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, n
         seg1 = slice(start_idx, apex_idx + 1)
         u = (s[seg1] - s_entry) / max(s_apex - s_entry, 1e-9)
         h = _hermite_step(u)
-        e[seg1] = e_outer + (e_inner - e_outer) * h
+        e[seg1] = entry_outer + (e_inner - entry_outer) * h
 
         # Exit spiral: inner -> outer.
         seg2 = slice(apex_idx, end_idx + 1)
         u = (s[seg2] - s_apex) / max(s_exit - s_apex, 1e-9)
         h = _hermite_step(u)
-        e[seg2] = e_inner + (e_outer - e_inner) * h
+        e[seg2] = e_inner + (exit_outer - e_inner) * h
 
         # Store indices for curvature shaping: start, apex and end
         corner_sections.append((start_idx, apex_idx, end_idx, c.sign))
 
         prev_exit = end_idx + 1
-        prev_outer_offset = e_outer
+        prev_offset = exit_outer
 
     # After the last corner remain on the outer edge of the first corner to
     # ensure continuity for closed tracks.
