@@ -39,23 +39,31 @@ class Corner:
     width: float  # mean track width over the corner
 
 
-def _find_corners(curvature: np.ndarray) -> List[Tuple[int, int]]:
-    """Identify contiguous segments of non‑zero curvature."""
+def _find_corners(curvature: np.ndarray, tol: float = 1e-9) -> List[Tuple[int, int]]:
+    """Identify contiguous segments of non‑zero curvature.
 
-    mask = np.abs(curvature) > 1e-9
+    Segments are split when the curvature drops below ``tol`` or when the
+    curvature sign flips, which enables the detection of alternating-sense
+    corners such as right–left–right sequences.
+    """
+
+    mask = np.abs(curvature) > tol
     if not np.any(mask):
         return []
     idx = np.flatnonzero(mask)
     segments: List[Tuple[int, int]] = []
     start = idx[0]
     prev = idx[0]
+    prev_sign = 1.0 if curvature[start] > 0 else -1.0
     for i in idx[1:]:
-        if i == prev + 1:
+        sign = 1.0 if curvature[i] > 0 else -1.0
+        if i == prev + 1 and sign == prev_sign:
             prev = i
             continue
         segments.append((start, prev))
         start = i
         prev = i
+        prev_sign = sign
     segments.append((start, prev))
     return segments
 

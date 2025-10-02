@@ -7,7 +7,7 @@ import numpy as np
 sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 
 from geometry import load_track_layout
-from clothoid_path import build_clothoid_path
+from clothoid_path import build_clothoid_path, _corner_data
 from io_utils import read_bike_params_csv
 from speed_solver import solve_speed_profile
 
@@ -197,6 +197,72 @@ def test_nan_apex_fraction_midpoint(tmp_path: Path) -> None:
         apex_idx = start_idx + int(np.argmin(offset[start_idx : end_idx + 1]))
     assert apex_idx == expected_apex
     assert np.isclose(offset[expected_apex], e_inner)
+
+
+def test_right_left_right_corners_split_and_hit_apexes() -> None:
+    """Alternating corners are detected separately and reach their apices."""
+
+    root = Path(__file__).resolve().parents[1]
+    geom = load_track_layout(
+        str(root / "data" / "track_layout_clothoid.csv"), ds=2.0, closed=True
+    )
+
+    corners = _corner_data(geom)
+    signs = [c.sign for c in corners]
+
+    esse_start = None
+    for idx in range(len(signs) - 2):
+        if signs[idx : idx + 3] == [-1.0, 1.0, -1.0]:
+            esse_start = idx
+            break
+
+    assert esse_start is not None, "Expected right-left-right sequence not found"
+
+    esse_corners = corners[esse_start : esse_start + 3]
+    assert len(esse_corners) == 3
+    assert esse_corners[0].end < esse_corners[1].start
+    assert esse_corners[1].end < esse_corners[2].start
+
+    s, offset, _ = build_clothoid_path(geom)
+
+    arc = np.zeros_like(geom.x, dtype=float)
+    arc[1:] = np.cumsum(np.hypot(np.diff(geom.x), np.diff(geom.y)))
+    entry = np.asarray(geom.entry_length, dtype=float)
+    exit = np.asarray(geom.exit_length, dtype=float)
+    apex_frac = np.asarray(geom.apex_fraction, dtype=float)
+
+    prev_exit = 0
+    for idx, corner in enumerate(corners):
+        entry_len = float(entry[corner.start])
+        exit_len = float(exit[corner.end])
+        s_entry_target = arc[corner.start] - entry_len
+        start_idx = int(np.searchsorted(arc, s_entry_target, side="left"))
+        start_idx = max(start_idx, prev_exit)
+        start_idx = min(start_idx, corner.start)
+
+        next_start = corners[idx + 1].start if idx < len(corners) - 1 else len(arc) - 1
+        s_exit_target = arc[corner.end] + exit_len
+        end_idx = int(np.searchsorted(arc, s_exit_target, side="right") - 1)
+        end_idx = min(end_idx, next_start)
+        end_idx = max(end_idx, corner.end)
+
+        if esse_start <= idx < esse_start + 3:
+            inner = corner.sign * corner.width / 2.0
+            seg = offset[start_idx : end_idx + 1]
+            if corner.sign > 0:
+                apex_value = np.max(seg)
+            else:
+                apex_value = np.min(seg)
+            assert np.isclose(apex_value, inner, atol=1e-6)
+
+        apex_val = float(apex_frac[corner.start])
+        if not np.isfinite(apex_val):
+            apex_val = 0.5
+        apex_val = float(np.clip(apex_val, 0.0, 1.0))
+        apex_idx = start_idx + int(apex_val * (end_idx - start_idx))
+        assert start_idx <= apex_idx <= end_idx
+
+        prev_exit = end_idx + 1
 
 
 def test_curvature_radius_profile(tmp_path: Path) -> None:
