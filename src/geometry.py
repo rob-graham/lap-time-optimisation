@@ -42,6 +42,10 @@ class TrackGeometry:
     entry_length: np.ndarray | None = None
     exit_length: np.ndarray | None = None
     apex_radius: np.ndarray | None = None
+    entry_offset: np.ndarray | None = None
+    exit_offset: np.ndarray | None = None
+    entry_offset_defined: np.ndarray | None = None
+    exit_offset_defined: np.ndarray | None = None
 
 
 def load_track(file_path: str, ds: float, closed: bool = True) -> TrackGeometry:
@@ -115,7 +119,14 @@ def load_track(file_path: str, ds: float, closed: bool = True) -> TrackGeometry:
     left_edge = np.column_stack((x_left, y_left))
     right_edge = np.column_stack((x_right, y_right))
 
-    return TrackGeometry(x_s, y_s, heading, curvature, left_edge, right_edge)
+    return TrackGeometry(
+        x_s,
+        y_s,
+        heading,
+        curvature,
+        left_edge,
+        right_edge,
+    )
 
 
 def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometry:
@@ -160,6 +171,12 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
     apex_frac_nodes = df.get("apex_fraction", pd.Series(np.nan, index=df.index)).to_numpy(float)
     entry_len_nodes = df.get("entry_length_m", pd.Series(0.0, index=df.index)).to_numpy(float)
     exit_len_nodes = df.get("exit_length_m", pd.Series(0.0, index=df.index)).to_numpy(float)
+    entry_offset_nodes = df.get(
+        "entry_offset_m", pd.Series(np.nan, index=df.index)
+    ).to_numpy(float)
+    exit_offset_nodes = df.get(
+        "exit_offset_m", pd.Series(np.nan, index=df.index)
+    ).to_numpy(float)
     section_types = df["section_type"].astype(str).to_numpy()
 
     x_list: list[np.ndarray] = []
@@ -171,6 +188,10 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
     entry_len_list: list[np.ndarray] = []
     exit_len_list: list[np.ndarray] = []
     apex_radius_list: list[np.ndarray] = []
+    entry_offset_list: list[np.ndarray] = []
+    exit_offset_list: list[np.ndarray] = []
+    entry_defined_list: list[np.ndarray] = []
+    exit_defined_list: list[np.ndarray] = []
 
     n = len(df)
     n_segments = n if closed else n - 1
@@ -201,6 +222,18 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
             entry_seg = np.zeros_like(x_seg)
             exit_seg = np.zeros_like(x_seg)
             apex_r_seg = np.full_like(x_seg, np.nan)
+            entry_val = entry_offset_nodes[i]
+            exit_val = exit_offset_nodes[i]
+            entry_defined = bool(np.isfinite(entry_val))
+            exit_defined = bool(np.isfinite(exit_val))
+            if not entry_defined:
+                entry_val = 0.0
+            if not exit_defined:
+                exit_val = 0.0
+            entry_offset_seg = np.full_like(x_seg, entry_val)
+            exit_offset_seg = np.full_like(x_seg, exit_val)
+            entry_defined_seg = np.full_like(x_seg, entry_defined, dtype=bool)
+            exit_defined_seg = np.full_like(x_seg, exit_defined, dtype=bool)
         elif seg_type == "corner":
             r = radius_nodes[i]
             if r == 0:
@@ -234,6 +267,20 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
             entry_seg = np.full_like(x_seg, entry_val)
             exit_seg = np.full_like(x_seg, exit_val)
             apex_r_seg = np.full_like(x_seg, apex_radius_nodes[i])
+            entry_val = entry_offset_nodes[i]
+            exit_val = exit_offset_nodes[i]
+            entry_defined = bool(np.isfinite(entry_val))
+            exit_defined = bool(np.isfinite(exit_val))
+            mean_width = float(np.mean(width_seg)) if len(width_seg) else 0.0
+            default_outer = -float(np.sign(r)) * mean_width / 2.0 if mean_width else 0.0
+            if not entry_defined:
+                entry_val = default_outer
+            if not exit_defined:
+                exit_val = default_outer
+            entry_offset_seg = np.full_like(x_seg, entry_val)
+            exit_offset_seg = np.full_like(x_seg, exit_val)
+            entry_defined_seg = np.full_like(x_seg, entry_defined, dtype=bool)
+            exit_defined_seg = np.full_like(x_seg, exit_defined, dtype=bool)
         else:
             raise ValueError(f"unknown section_type '{section_types[i]}'")
 
@@ -246,6 +293,10 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
         entry_len_list.append(entry_seg)
         exit_len_list.append(exit_seg)
         apex_radius_list.append(apex_r_seg)
+        entry_offset_list.append(entry_offset_seg)
+        exit_offset_list.append(exit_offset_seg)
+        entry_defined_list.append(entry_defined_seg)
+        exit_defined_list.append(exit_defined_seg)
 
     x = np.concatenate(x_list)
     y = np.concatenate(y_list)
@@ -256,6 +307,10 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
     entry_length = np.concatenate(entry_len_list)
     exit_length = np.concatenate(exit_len_list)
     apex_radius = np.concatenate(apex_radius_list)
+    entry_offset = np.concatenate(entry_offset_list)
+    exit_offset = np.concatenate(exit_offset_list)
+    entry_offset_defined = np.concatenate(entry_defined_list).astype(bool)
+    exit_offset_defined = np.concatenate(exit_defined_list).astype(bool)
 
     half_width = 0.5 * width
     normal_x = -np.sin(heading)
@@ -274,4 +329,8 @@ def load_track_layout(path: str, ds: float, closed: bool = True) -> TrackGeometr
         entry_length,
         exit_length,
         apex_radius,
+        entry_offset,
+        exit_offset,
+        entry_offset_defined,
+        exit_offset_defined,
     )
