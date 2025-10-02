@@ -156,6 +156,7 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, n
     e_outer_first = -first.sign * first.width / 2.0
 
     prev_exit = 0
+    prev_outer_offset = e_outer_first
     # Record corner index ranges for post processing of curvature
     corner_sections: List[Tuple[int, int, int, float]] = []
 
@@ -179,9 +180,16 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, n
         end_idx = min(end_idx, next_start)
         end_idx = max(end_idx, c.end)
 
-        # Fill preceding straight with the correct outer offset.
+        # Blend the preceding straight between the previous and upcoming outer
+        # offsets to avoid discontinuities when alternating corner signs.
         if start_idx > prev_exit:
-            e[prev_exit:start_idx] = e_outer
+            seg = slice(prev_exit, start_idx + 1)
+            s_start = s[prev_exit]
+            s_end = s[start_idx]
+            span = max(s_end - s_start, 1e-9)
+            u = (s[seg] - s_start) / span
+            h = _hermite_step(u)
+            e[seg] = prev_outer_offset + (e_outer - prev_outer_offset) * h
         elif prev_exit == 0 and i == 0:
             e[:start_idx] = e_outer_first
 
@@ -212,6 +220,7 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, n
         corner_sections.append((start_idx, apex_idx, end_idx, c.sign))
 
         prev_exit = end_idx + 1
+        prev_outer_offset = e_outer
 
     # After the last corner remain on the outer edge of the first corner to
     # ensure continuity for closed tracks.
