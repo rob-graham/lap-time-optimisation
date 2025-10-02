@@ -1,0 +1,13 @@
+x_m,y_m,section_type,radius_m,apex_radius_m,width_m,camber_rad,grade_rad,apex_fraction,entry_length_m,exit_length_m
+0,0,straight,inf,inf,8,0,0,0.5,50,50
+0,150,corner,-50,30,8,0,0,0.5,50,50
+50,200,straight,inf,inf,8,0,0,0.5,50,50
+150,200,corner,-20,15,8,0,0,0.5,50,20
+170,180,corner,20,15,8,0,0,0.5,20,20
+190,160,corner,-20,15,8,0,0,0.5,20,20
+210,140,straight,inf,inf,8,0,0,0.5,20,100
+210,-90,corner,-90,40,8,0,0,0.5,100,100
+120,-180,straight,inf,inf,8,0,0,0.5,50,50
+30,-180,corner,-30,20,8,0,0,0.5,50,50
+0,-150,straight,inf,inf,8,0,0,0.5,50,50
+0,0,straight,inf,inf,8,0,0,0.5,50,50
