@@ -170,10 +170,7 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, n
         exit_len = float(exit_lengths[c.end])
 
         s_entry_target = s[c.start] - entry_len
-        start_idx = int(np.searchsorted(s, s_entry_target, side="left"))
-        start_idx = max(start_idx, prev_exit)
-        start_idx = min(start_idx, c.start)
-
+        start_idx_raw = int(np.searchsorted(s, s_entry_target, side="left"))
         next_start = corners[i + 1].start if i < len(corners) - 1 else n - 1
         s_exit_target = s[c.end] + exit_len
         end_idx = int(np.searchsorted(s, s_exit_target, side="right") - 1)
@@ -182,6 +179,24 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, n
 
         # Blend the preceding straight between the previous and upcoming outer
         # offsets to avoid discontinuities when alternating corner signs.
+        overlap = max(prev_exit - start_idx_raw, 0)
+        if overlap > 0:
+            prev_exit_idx = min(prev_exit, n - 1)
+            seg_start = max(prev_exit_idx - overlap, 0)
+            seg_end = prev_exit_idx + 1
+            if seg_start < seg_end:
+                seg = slice(seg_start, seg_end)
+                s_start = s[seg_start]
+                s_end = s[prev_exit_idx]
+                span = max(s_end - s_start, 1e-9)
+                u = (s[seg] - s_start) / span
+                h = _hermite_step(u)
+                e[seg] = prev_outer_offset + (e_outer - prev_outer_offset) * h
+            start_idx = prev_exit
+        else:
+            start_idx = max(start_idx_raw, prev_exit)
+            start_idx = min(start_idx, c.start)
+
         if start_idx > prev_exit:
             seg = slice(prev_exit, start_idx + 1)
             s_start = s[prev_exit]
@@ -192,6 +207,8 @@ def build_clothoid_path(track: TrackGeometry) -> Tuple[np.ndarray, np.ndarray, n
             e[seg] = prev_outer_offset + (e_outer - prev_outer_offset) * h
         elif prev_exit == 0 and i == 0:
             e[:start_idx] = e_outer_first
+
+        start_idx = min(start_idx, end_idx)
 
         # Determine indices for entry, apex and exit.
         apex_val = float(apex_fractions[c.start])

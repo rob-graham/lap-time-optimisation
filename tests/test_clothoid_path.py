@@ -199,6 +199,101 @@ def test_nan_apex_fraction_midpoint(tmp_path: Path) -> None:
     assert np.isclose(offset[expected_apex], e_inner)
 
 
+def test_overlapping_entries_blend_monotonically() -> None:
+    """Overlapping alternating corners blend outer offsets smoothly."""
+
+    n = 80
+    x = np.arange(n, dtype=float)
+    y = np.zeros(n)
+    heading = np.zeros(n)
+    curvature = np.zeros(n)
+    width = 10.0
+
+    curvature[20:25] = 0.02
+    curvature[40:45] = -0.02
+
+    left_edge = np.column_stack((x, np.full(n, width / 2.0)))
+    right_edge = np.column_stack((x, np.full(n, -width / 2.0)))
+
+    apex_fraction = np.full(n, 0.5)
+    entry_length = np.zeros(n)
+    exit_length = np.zeros(n)
+
+    entry_length[20] = 8.0
+    exit_length[24] = 8.0
+    entry_length[40] = 8.0
+    exit_length[44] = 8.0
+
+    geom = TrackGeometry(
+        x=x,
+        y=y,
+        heading=heading,
+        curvature=curvature,
+        left_edge=left_edge,
+        right_edge=right_edge,
+        apex_fraction=apex_fraction,
+        entry_length=entry_length,
+        exit_length=exit_length,
+        apex_radius=None,
+    )
+
+    s, offset, _ = build_clothoid_path(geom)
+    corners = _corner_data(geom)
+    assert len(corners) >= 2
+    assert corners[0].sign != corners[1].sign
+
+    arc = np.zeros_like(geom.x, dtype=float)
+    arc[1:] = np.cumsum(np.hypot(np.diff(geom.x), np.diff(geom.y)))
+    entry = np.asarray(geom.entry_length, dtype=float)
+    exit = np.asarray(geom.exit_length, dtype=float)
+
+    prev_exit = 0
+    prev_outer_offset = -corners[0].sign * corners[0].width / 2.0
+    overlap_info = None
+    for idx, corner in enumerate(corners):
+        entry_len = float(entry[corner.start])
+        exit_len = float(exit[corner.end])
+
+        s_entry_target = arc[corner.start] - entry_len
+        start_idx_raw = int(np.searchsorted(arc, s_entry_target, side="left"))
+
+        next_start = corners[idx + 1].start if idx < len(corners) - 1 else len(arc) - 1
+        s_exit_target = arc[corner.end] + exit_len
+        end_idx = int(np.searchsorted(arc, s_exit_target, side="right") - 1)
+        end_idx = min(end_idx, next_start)
+        end_idx = max(end_idx, corner.end)
+
+        overlap = max(prev_exit - start_idx_raw, 0)
+        if overlap > 0:
+            shared_start = max(prev_exit - overlap, 0)
+            shared_end = min(prev_exit, len(offset) - 1)
+            overlap_info = (
+                shared_start,
+                shared_end,
+                prev_outer_offset,
+                -corner.sign * corner.width / 2.0,
+            )
+            start_idx = prev_exit
+        else:
+            start_idx = max(start_idx_raw, prev_exit)
+            start_idx = min(start_idx, corner.start)
+
+        prev_exit = end_idx + 1
+        prev_outer_offset = -corner.sign * corner.width / 2.0
+
+    assert overlap_info is not None
+    shared_start, shared_end, prev_outer, next_outer = overlap_info
+    segment = offset[shared_start : shared_end + 1]
+    assert segment.size >= 2
+    assert np.isclose(segment[0], prev_outer)
+    assert np.isclose(segment[-1], next_outer)
+
+    diffs = np.diff(segment)
+    if next_outer >= prev_outer:
+        assert np.all(diffs >= -1e-9)
+    else:
+        assert np.all(diffs <= 1e-9)
+
 def test_right_left_right_corners_split_and_hit_apexes() -> None:
     """Alternating corners are detected separately and reach their apices."""
 
