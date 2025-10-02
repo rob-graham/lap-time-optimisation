@@ -10,7 +10,12 @@ import pytest
 # Add the ``src`` directory to the import path for test execution.
 sys.path.append(str(Path(__file__).resolve().parents[1] / "src"))
 
-from plots import plot_plan_view, plot_speed_profile, plot_acceleration_profile
+from plots import (
+    plot_plan_view,
+    plot_speed_profile,
+    plot_acceleration_profile,
+    plot_speed_caps,
+)
 
 
 def _track_data():
@@ -60,4 +65,29 @@ def test_plot_acceleration_profile_with_label():
     labels = [line.get_label() for line in ax.get_lines()]
     assert "Longitudinal (Method B)" in labels
     assert "Lateral (Method B)" in labels
+    plt.close(ax.figure)
+
+
+def test_plot_speed_caps_enforces_max_limit():
+    s = np.linspace(0.0, 1.0, 5)
+    v = np.linspace(0.0, 10.0, 5)
+    v_lean = np.array([1e6, np.inf, 50.0, np.nan, 80.0])
+    v_steer = np.full_like(s, 5e5)
+    max_cap = 123.0
+
+    ax = plot_speed_caps(
+        s,
+        v,
+        v_lean=v_lean,
+        v_steer=v_steer,
+        max_speed_cap=max_cap,
+    )
+
+    ymin, ymax = ax.get_ylim()
+    assert ymin == pytest.approx(0.0)
+    assert ymax == pytest.approx(max_cap)
+
+    for line in ax.get_lines():
+        assert np.nanmax(line.get_ydata()) <= max_cap
+
     plt.close(ax.figure)

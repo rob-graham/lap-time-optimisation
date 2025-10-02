@@ -84,21 +84,50 @@ def plot_speed_caps(
     v_steer: Iterable[float] | None = None,
     label: str = "Speed",
     ax: Optional[plt.Axes] = None,
+    max_speed_cap: float | None = None,
 ) -> plt.Axes:
-    """Overlay speed caps with the final speed profile."""
+    """Overlay speed caps with the final speed profile.
+
+    Any non-finite cap values are omitted from the plot to avoid matplotlib
+    auto-scaling to extremely large values.  Remaining data are clipped to the
+    provided ``max_speed_cap`` (default ``100.0`` m/s) and the axis limits are
+    fixed accordingly.
+    """
     if ax is None:
         _, ax = plt.subplots()
 
-    ax.plot(s, v, label=label, color="tab:blue")
+    if max_speed_cap is None:
+        max_speed_cap = 100.0
+
+    s_arr = np.asarray(list(s), dtype=float)
+    v_arr = np.asarray(list(v), dtype=float)
+
+    ax.plot(s_arr, np.clip(v_arr, 0.0, max_speed_cap), label=label, color="tab:blue")
+
+    def _plot_cap(data: Iterable[float], *, label: str, color: str) -> None:
+        cap_arr = np.asarray(list(data), dtype=float)
+        mask = np.isfinite(cap_arr)
+        if not np.any(mask):
+            return
+        cap_arr = cap_arr[mask]
+        s_cap = s_arr[mask]
+        ax.plot(
+            s_cap,
+            np.clip(cap_arr, 0.0, max_speed_cap),
+            label=label,
+            color=color,
+            linestyle="--",
+        )
 
     if v_lean is not None:
-        ax.plot(s, v_lean, label="Lean cap", color="tab:orange", linestyle="--")
+        _plot_cap(v_lean, label="Lean cap", color="tab:orange")
 
     if v_steer is not None:
-        ax.plot(s, v_steer, label="Steer cap", color="tab:green", linestyle="--")
+        _plot_cap(v_steer, label="Steer cap", color="tab:green")
 
     ax.set_xlabel("Distance along track [m]")
     ax.set_ylabel("Speed [m/s]")
+    ax.set_ylim(0.0, max_speed_cap)
     ax.legend()
     return ax
 

@@ -215,7 +215,13 @@ def run(
         from .plots import plot_speed_caps
         import matplotlib.pyplot as plt
 
-        plot_speed_caps(s, v, v_lean=v_lean_cap, v_steer=v_steer_cap)
+        plot_speed_caps(
+            s,
+            v,
+            v_lean=v_lean_cap,
+            v_steer=v_steer_cap,
+            max_speed_cap=float(v_top),
+        )
         plt.show()
 
     # Write outputs
